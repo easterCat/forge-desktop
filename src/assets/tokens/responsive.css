@@ -1,0 +1,65 @@
+/* ============================================================
+   RESPONSIVE TOKENS
+   统一的响应式断点系统
+   ============================================================ */
+
+/* === Default values (large screen ≥1025px) === */
+:root {
+  /* Spacing */
+  --content-padding-x: 32px;
+  --content-padding-y: 24px;
+  --content-padding-bottom: 40px;
+
+  /* Layout */
+  --sidebar-w: 240px;
+  --grid-gap: 16px;
+  --stats-columns: 4;
+  --card-min-width: 320px;
+
+  /* Typography */
+  --header-height: 56px;
+}
+
+/* === Tablet ≤1024px === */
+@media (max-width: 1024px) {
+  :root {
+    --content-padding-x: 24px;
+    --content-padding-y: 20px;
+    --sidebar-w: 60px;
+    --grid-gap: 14px;
+    --stats-columns: 2;
+    --card-min-width: 300px;
+  }
+}
+
+/* === Small tablet ≤768px === */
+@media (max-width: 768px) {
+  :root {
+    --content-padding-x: 16px;
+    --content-padding-y: 16px;
+    --content-padding-bottom: 72px;
+    --sidebar-w: 0px;
+    --grid-gap: 14px;
+    --stats-columns: 2;
+    --card-min-width: 100%;
+    --header-height: 48px;
+  }
+}
+
+/* === Phone ≤640px === */
+@media (max-width: 640px) {
+  :root {
+    --stats-columns: 1;
+    --content-padding-x: 12px;
+    --content-padding-y: 12px;
+  }
+}
+
+/* === Small phone ≤480px === */
+@media (max-width: 480px) {
+  :root {
+    --content-padding-x: 10px;
+    --content-padding-y: 10px;
+    --grid-gap: 10px;
+  }
+}

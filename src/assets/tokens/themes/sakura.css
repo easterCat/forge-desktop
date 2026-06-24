@@ -1,0 +1,86 @@
+/**
+ * Forge Design Tokens — Sakura Theme
+ * Soft pink tint
+ * Source: design/forge-cross-platform-glass.html THEMES array
+ */
+
+:root[data-theme="sakura"] {
+  --bg: #F8F0F2;
+  --bg-gradient: linear-gradient(160deg, #F5ECF0 0%, #F7EEF1 25%, #FAF2F4 50%, #F8F0F2 75%, #F3ECED 100%);
+  --border: rgba(255, 255, 255, 0.20);
+  --border-hover: rgba(255, 255, 255, 0.35);
+  --border-window: rgba(255, 255, 255, 0.18);
+  --border-outer-glow: rgba(255, 255, 255, 0.40);
+  --fg: #3A2028;
+  --fg-title: #2A1018;
+  --fg-muted: #7C5C6C;
+  --fg-ghost: #B898A8;
+  --fg-white: #3A2028;
+  --accent: #8A5A6A;
+  --accent-hover: #7A4A5A;
+  --accent-press: #6A3A4A;
+  --accent-glow: rgba(138, 90, 106, 0.12);
+  --success: #7A8A6A;
+  --error: #B85A70;
+  --info: #8A6B7A;
+  --warn: #C47A8A;
+  --tint-warm: rgba(205, 165, 185, 0.12);
+  --tint-cool: rgba(195, 155, 175, 0.10);
+  --tint-soft: rgba(215, 175, 195, 0.14);
+  --tint-amber: rgba(195, 155, 165, 0.08);
+  --sidebar-w: 240px;
+  --topbar-h: 64px;
+  --radius: 18px;
+  --radius-sm: 12px;
+  --radius-lg: 24px;
+  --radius-xl: 28px;
+  --shadow: 0 2px 16px rgba(0, 0, 0, 0.04);
+  --shadow-hover: 0 8px 32px rgba(0, 0, 0, 0.07);
+  --shadow-btn: 0 1px 4px rgba(0, 0, 0, 0.06);
+  --shadow-window: 0 16px 48px rgba(0, 0, 0, 0.10), 0 4px 16px rgba(0, 0, 0, 0.04);
+  --shadow-inner: inset 0 1px 2px rgba(0, 0, 0, 0.03);
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --t-fast: 150ms var(--ease);
+  --t-base: 200ms var(--ease);
+  --t-slow: 300ms var(--ease);
+}
+
+:root[data-theme="sakura"] body,
+:root[data-theme="sakura"] html {
+  background: var(--bg);
+  background-image:
+    linear-gradient(160deg, #F5ECF0 0%, #F7EEF1 25%, #FAF2F4 50%, #F8F0F2 75%, #F3ECED 100%),
+    radial-gradient(ellipse 120% 80% at 0% 0%, rgba(200, 155, 175, 0.20) 0%, transparent 50%),
+    radial-gradient(ellipse 100% 80% at 100% 100%, rgba(180, 145, 165, 0.18) 0%, transparent 50%),
+    radial-gradient(ellipse 80% 60% at 60% 30%, rgba(210, 175, 195, 0.12) 0%, transparent 45%),
+    linear-gradient(rgba(0, 0, 0, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.025) 1px, transparent 1px),
+    linear-gradient(rgba(0, 0, 0, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.015) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 24px 24px, 24px 24px, 96px 96px, 96px 96px;
+  background-attachment: fixed;
+}
+
+:root[data-theme="sakura"] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 70% 50% at 10% 15%, rgba(190, 145, 165, 0.15) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 50% at 90% 80%, rgba(170, 135, 155, 0.12) 0%, transparent 50%),
+    radial-gradient(ellipse 50% 40% at 50% 50%, rgba(200, 165, 185, 0.08) 0%, transparent 45%);
+}
+
+:root[data-theme="sakura"] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.18;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+  background-size: 400px 400px;
+  will-change: auto;
+}

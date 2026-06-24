@@ -1,0 +1,23 @@
+/**
+ * Forge Design Tokens — Forest Theme
+ * Deep earthy green
+ */
+:root[data-theme="forest"] {
+  --bg: #F0F4EE; --bg-gradient: linear-gradient(160deg, #EAF0E8 0%, #EDF2EB 25%, #F2F5F0 50%, #F0F4EE 75%, #E6ECE4 100%);
+  --border: rgba(255,255,255,0.20); --border-hover: rgba(255,255,255,0.35); --border-window: rgba(255,255,255,0.18); --border-outer-glow: rgba(255,255,255,0.40);
+  --fg: #14200E; --fg-title: #0A1606; --fg-muted: #5A7A4A; --fg-ghost: #98B888; --fg-white: #14200E;
+  --accent: #3A6A2A; --accent-hover: #2A5A1A; --accent-press: #1A4A0A; --accent-glow: rgba(58,106,42,0.12);
+  --success: #5A8A4A; --error: #B85A42; --info: #5A8A6A; --warn: #5A8A4A;
+  --tint-warm: rgba(145,175,125,0.12); --tint-cool: rgba(135,165,115,0.10); --tint-soft: rgba(155,185,135,0.14); --tint-amber: rgba(135,165,105,0.08);
+  --sidebar-w: 240px; --topbar-h: 64px; --radius: 18px; --radius-sm: 12px; --radius-lg: 24px; --radius-xl: 28px;
+  --shadow: 0 2px 16px rgba(0,0,0,0.04); --shadow-hover: 0 8px 32px rgba(0,0,0,0.07); --shadow-btn: 0 1px 4px rgba(0,0,0,0.06);
+  --shadow-window: 0 16px 48px rgba(0,0,0,0.10),0 4px 16px rgba(0,0,0,0.04); --shadow-inner: inset 0 1px 2px rgba(0,0,0,0.03);
+  --ease: cubic-bezier(0.4,0,0.2,1); --t-fast: 150ms var(--ease); --t-base: 200ms var(--ease); --t-slow: 300ms var(--ease);
+}
+:root[data-theme="forest"] body, :root[data-theme="forest"] html {
+  background: var(--bg);
+  background-image: linear-gradient(160deg,#EAF0E8 0%,#EDF2EB 25%,#F2F5F0 50%,#F0F4EE 75%,#E6ECE4 100%),radial-gradient(ellipse 120% 80% at 0% 0%,rgba(125,165,105,0.20) 0%,transparent 50%),radial-gradient(ellipse 100% 80% at 100% 100%,rgba(105,145,95,0.18) 0%,transparent 50%),radial-gradient(ellipse 80% 60% at 60% 30%,rgba(135,175,115,0.12) 0%,transparent 45%),linear-gradient(rgba(0,0,0,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,0.025) 1px,transparent 1px),linear-gradient(rgba(0,0,0,0.015) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,0.015) 1px,transparent 1px);
+  background-size: 100% 100%,100% 100%,100% 100%,100% 100%,24px 24px,24px 24px,96px 96px,96px 96px; background-attachment: fixed;
+}
+:root[data-theme="forest"] body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index:0; background: radial-gradient(ellipse 70% 50% at 10% 15%,rgba(115,155,95,0.15) 0%,transparent 50%),radial-gradient(ellipse 60% 50% at 90% 80%,rgba(95,135,85,0.12) 0%,transparent 50%),radial-gradient(ellipse 50% 40% at 50% 50%,rgba(125,165,105,0.08) 0%,transparent 45%); }
+:root[data-theme="forest"] body::after { content:''; position:fixed; inset:0; pointer-events:none; z-index:0; opacity:0.18; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E"); background-size: 400px 400px; will-change: auto; }

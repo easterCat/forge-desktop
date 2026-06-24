@@ -1,0 +1,29 @@
+<div class="section-header"><h2>Settings</h2></div>
+<div class="settings-grid">
+  <div class="setting-group">
+    <h4>GitHub Token</h4>
+    <p style="font-size:13px;color:var(--fg-muted);margin-bottom:12px">Required for private repository access</p>
+    <div class="setting-row"><span class="label">Token status</span><span class="badge success">Configured</span></div>
+    <div class="setting-row"><span class="label">Preview</span><span style="font-family:var(--font-mono);font-size:12px;color:var(--fg-muted)">ghp_****</span></div>
+    <div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-primary btn-sm">Update Token</button><button class="btn btn-ghost btn-sm" style="color:var(--error)">Clear</button></div>
+  </div>
+  <div class="setting-group">
+    <h4>Application</h4>
+    <div class="theme-grid" id="themeGrid"></div>
+    <div class="setting-row"><span class="label">Auto-scan on launch</span><div class="toggle-wrap"><div class="toggle on" data-setting="autoScan" onclick="toggleSetting(this,'autoScan')"></div></div></div>
+    <div class="setting-row"><span class="label">Daily backup</span><div class="toggle-wrap"><div class="toggle on" data-setting="dailyBackup" onclick="toggleSetting(this,'dailyBackup')"></div></div></div>
+    <div class="setting-row"><span class="label">Notification sounds</span><div class="toggle-wrap"><div class="toggle" data-setting="notifSounds" onclick="toggleSetting(this,'notifSounds')"></div></div></div>
+  </div>
+  <div class="setting-group">
+    <h4>Performance</h4>
+    <div class="setting-row"><span class="label">CLI parallel detection</span><span style="font-family:var(--font-mono);font-size:12px;color:var(--fg-muted)">rayon · 60s timeout</span></div>
+    <div class="setting-row"><span class="label">SQLite cache</span><span style="font-family:var(--font-mono);font-size:12px;color:var(--fg-muted)">bundled rusqlite</span></div>
+    <div class="setting-row"><span class="label">MCP Discovery Cache</span><span style="font-family:var(--font-mono);font-size:12px;color:var(--fg-muted)">100 entries · 5m TTL</span></div>
+  </div>
+  <div class="setting-group">
+    <h4>Data Paths</h4>
+    <div class="setting-row"><span class="label">App data</span><span style="font-family:var(--font-mono);font-size:11px;color:var(--fg-ghost)">~/.local/share/forge/</span></div>
+    <div class="setting-row"><span class="label">Database</span><span style="font-family:var(--font-mono);font-size:11px;color:var(--fg-ghost)">forge.db (SQLite)</span></div>
+    <div class="setting-row"><span class="label">Logs</span><span style="font-family:var(--font-mono);font-size:11px;color:var(--fg-ghost)">~/.local/share/forge/logs/</span></div>
+  </div>
+</div>

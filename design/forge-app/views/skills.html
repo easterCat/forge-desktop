@@ -1,0 +1,25 @@
+<div class="section-header"><h2>Skills</h2><span class="count" id="skillsCount">15 skills</span></div>
+<div class="source-tabs" id="skillsSourceTabs">
+  <div class="source-tab active" onclick="switchSkillsSource('all',this)">All <span class="tab-count">15</span></div>
+  <div class="source-tab" onclick="switchSkillsSource('local',this)">Local <span class="tab-count">7</span></div>
+  <div class="source-tab" onclick="switchSkillsSource('anthropic',this)">Anthropic <span class="tab-count">3</span></div>
+  <div class="source-tab" onclick="switchSkillsSource('marketplace',this)">Marketplace <span class="tab-count">3</span></div>
+  <div class="source-tab" onclick="switchSkillsSource('skills-sh',this)">Skills.sh <span class="tab-count">2</span></div>
+</div>
+<div class="filter-bar">
+  <div class="search-input"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9A9A9A" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" placeholder="Search skills…" id="skillsSearch" aria-label="Search skills" oninput="debouncedFilterSkills()"><div class="clear-btn" onclick="document.getElementById('skillsSearch').value='';filterSkills()"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#9A9A9A" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg></div></div>
+  <select class="filter-select" id="skillsTypeFilter" onchange="filterSkills()">
+    <option value="all">All Types</option>
+    <option value="agent">Agent</option>
+    <option value="command">Command</option>
+    <option value="automation">Automation</option>
+  </select>
+  <select class="filter-select" id="skillsStatusFilter" onchange="filterSkills()">
+    <option value="all">All Status</option>
+    <option value="enabled">Enabled</option>
+    <option value="disabled">Disabled</option>
+  </select>
+  <div class="btn-group"><button class="btn btn-secondary btn-sm" onclick="openModal('importSkillModal')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Import</button>
+  <button class="btn btn-primary btn-sm" onclick="showNotification('Syncing all repositories…','info')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Sync All</button></div>
+</div>
+<div class="card-grid" id="skillsList"></div>

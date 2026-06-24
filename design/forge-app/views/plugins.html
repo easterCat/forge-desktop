@@ -1,0 +1,56 @@
+<div class="section-header"><h2>Plugins</h2><span class="count" id="pluginsCount">12 installed</span></div>
+<div class="tab-bar" id="pluginsTabs">
+  <div class="tab-item active" onclick="switchPluginTab('installed',this)">Installed <span style="font-family:var(--font-mono);font-size:11px;opacity:0.5">6</span></div>
+  <div class="tab-item" onclick="switchPluginTab('marketplace',this)">Marketplace</div>
+  <div class="tab-item" onclick="switchPluginTab('sources',this)">Sources <span style="font-family:var(--font-mono);font-size:11px;opacity:0.5">3</span></div>
+</div>
+<div id="plugins-installed">
+  <div class="filter-bar">
+    <div class="search-input"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9A9A9A" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" placeholder="Search installed plugins…" id="pluginSearch" aria-label="Search installed plugins" oninput="debouncedFilterPlugins()"><div class="clear-btn" onclick="document.getElementById('pluginSearch').value='';filterPlugins()"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#9A9A9A" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg></div></div>
+    <select class="filter-select" id="pluginStatusFilter" onchange="filterPlugins()">
+      <option value="all">All Status</option>
+      <option value="enabled">Enabled</option>
+      <option value="disabled">Disabled</option>
+    </select>
+  </div>
+  <div class="card-grid" id="pluginsList"></div>
+</div>
+<div id="plugins-marketplace" style="display:none">
+  <div class="source-tabs" id="marketplaceSourceTabs">
+    <div class="source-tab active" onclick="switchMarketplaceSource('all',this)">All Sources <span class="tab-count">21</span></div>
+    <div class="source-tab" onclick="switchMarketplaceSource('forge-official',this)">forge-official <span class="tab-count">12</span></div>
+    <div class="source-tab" onclick="switchMarketplaceSource('community-hub',this)">community-hub <span class="tab-count">8</span></div>
+    <div class="source-tab" onclick="switchMarketplaceSource('ai-tools-pack',this)">ai-tools-pack <span class="tab-count">1</span></div>
+  </div>
+  <div class="filter-bar">
+    <div class="search-input"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--fg-ghost)" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" placeholder="Search marketplace…" id="marketplaceSearch" aria-label="Search marketplace" oninput="filterMarketplace()"><div class="clear-btn" onclick="document.getElementById('marketplaceSearch').value='';filterMarketplace()"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#9A9A9A" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg></div></div>
+    <select class="filter-select" id="marketplaceCategoryFilter" onchange="filterMarketplace()">
+      <option value="all">All Categories</option>
+      <option value="automation">Automation</option>
+      <option value="ai">AI / ML</option>
+      <option value="devtools">Dev Tools</option>
+      <option value="ui">UI / Theme</option>
+      <option value="data">Data</option>
+      <option value="productivity">Productivity</option>
+    </select>
+    <select class="filter-select" id="marketplaceSortFilter" onchange="filterMarketplace()">
+      <option value="popular">Most Popular</option>
+      <option value="newest">Newest</option>
+      <option value="name">A–Z</option>
+    </select>
+    <button class="btn btn-secondary btn-sm" onclick="filterMarketplace()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg><span>Refresh</span></button>
+  </div>
+  <div class="marketplace-grid" id="marketplaceGrid"></div>
+</div>
+<div id="plugins-sources" style="display:none">
+  <div class="filter-bar">
+    <div class="search-input"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--fg-ghost)" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" placeholder="Search sources…" oninput="debouncedFilterSources(this.value)"><div class="clear-btn"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#9A9A9A" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg></div></div>
+    <select class="filter-select" onchange="filterSourcesByStatus(this.value)">
+      <option value="all">All Status</option>
+      <option value="installed">Installed</option>
+      <option value="pending">Pending</option>
+    </select>
+    <button class="btn btn-primary btn-sm" onclick="openModal('addSourceModal')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span>Add Source</span></button>
+  </div>
+  <div class="sources-grid" id="sourcesList"></div>
+</div>

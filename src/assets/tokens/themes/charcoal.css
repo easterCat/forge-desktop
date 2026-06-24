@@ -1,0 +1,27 @@
+/**
+ * Forge Design Tokens — Charcoal Theme
+ * Dark neutral glass
+ */
+:root[data-theme="charcoal"] {
+  --bg: #181818; --bg-gradient: linear-gradient(160deg, #161616 0%, #181818 25%, #1A1A1A 50%, #181818 75%, #141414 100%);
+  --border: rgba(255,255,255,0.10); --border-hover: rgba(255,255,255,0.18); --border-window: rgba(255,255,255,0.06); --border-outer-glow: rgba(255,255,255,0.08);
+  --fg: #E8E8E8; --fg-title: #F2F2F2; --fg-muted: #A0A0A0; --fg-ghost: #686868; --fg-white: #FFFFFF;
+  --accent: #6A8A6A; --accent-hover: #7A9A7A; --accent-press: #5A7A5A; --accent-glow: rgba(106,138,106,0.15);
+  --success: #6A8A6A; --error: #8A6A6A; --info: #6A8A8A; --warn: #8A6A6A;
+  --tint-warm: rgba(106,138,106,0.06); --tint-cool: rgba(106,138,138,0.05); --tint-soft: rgba(106,138,106,0.07); --tint-amber: rgba(138,106,106,0.04);
+  --sidebar-w: 240px; --topbar-h: 64px; --radius: 18px; --radius-sm: 12px; --radius-lg: 24px; --radius-xl: 28px;
+  --shadow: 0 2px 16px rgba(0,0,0,0.25); --shadow-hover: 0 6px 24px rgba(0,0,0,0.35); --shadow-btn: 0 1px 6px rgba(0,0,0,0.30);
+  --shadow-window: 0 16px 48px rgba(0,0,0,0.40),0 4px 16px rgba(0,0,0,0.20); --shadow-inner: inset 0 1px 2px rgba(0,0,0,0.20);
+  --ease: cubic-bezier(0.4,0,0.2,1); --t-fast: 150ms var(--ease); --t-base: 200ms var(--ease); --t-slow: 300ms var(--ease);
+  /* Liquid Glass — Dynamic Sheen (dark) */
+  --glass-sheen: linear-gradient(135deg, rgba(255,255,255,0.00) 0%, rgba(255,255,255,0.03) 40%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.03) 60%, rgba(255,255,255,0.00) 100%);
+  --glass-sheen-hover: linear-gradient(135deg, rgba(255,255,255,0.00) 0%, rgba(255,255,255,0.05) 35%, rgba(255,255,255,0.10) 50%, rgba(255,255,255,0.05) 65%, rgba(255,255,255,0.00) 100%);
+  --glass-sheen-active: linear-gradient(135deg, rgba(255,255,255,0.00) 0%, rgba(255,255,255,0.02) 45%, rgba(255,255,255,0.04) 50%, rgba(255,255,255,0.02) 55%, rgba(255,255,255,0.00) 100%);
+}
+:root[data-theme="charcoal"] body, :root[data-theme="charcoal"] html {
+  background: var(--bg);
+  background-image: linear-gradient(160deg,#161616 0%,#181818 25%,#1A1A1A 50%,#181818 75%,#141414 100%),radial-gradient(ellipse 120% 80% at 0% 0%,rgba(106,138,106,0.12) 0%,transparent 50%),radial-gradient(ellipse 100% 80% at 100% 100%,rgba(106,106,138,0.10) 0%,transparent 50%),radial-gradient(ellipse 80% 60% at 60% 30%,rgba(138,106,106,0.08) 0%,transparent 45%),linear-gradient(rgba(255,255,255,0.02) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.02) 1px,transparent 1px),linear-gradient(rgba(255,255,255,0.01) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.01) 1px,transparent 1px);
+  background-size: 100% 100%,100% 100%,100% 100%,100% 100%,24px 24px,24px 24px,96px 96px,96px 96px; background-attachment: fixed;
+}
+:root[data-theme="charcoal"] body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index:0; background: radial-gradient(ellipse 70% 50% at 10% 15%,rgba(106,138,106,0.08) 0%,transparent 50%),radial-gradient(ellipse 60% 50% at 90% 80%,rgba(106,106,138,0.06) 0%,transparent 50%),radial-gradient(ellipse 50% 40% at 50% 50%,rgba(138,106,106,0.04) 0%,transparent 45%); }
+:root[data-theme="charcoal"] body::after { content:''; position:fixed; inset:0; pointer-events:none; z-index:0; opacity:0.15; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E"); background-size: 400px 400px; will-change: auto; }

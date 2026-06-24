@@ -1,0 +1,47 @@
+{
+  "$schema": "https://schema.tauri.app/config/2.0.0",
+  "productName": "Forge",
+  "version": "0.1.0",
+  "identifier": "com.forge.desktop",
+  "build": {
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "Forge",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true,
+        "decorations": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' https://prompt.always200.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://prompt.always200.com https://cdn.tailgrid.com https://unpkg.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://prompt.always200.com https://cdn.tailgrid.com https://unpkg.com https://cdn.jsdelivr.net; img-src 'self' data: https: blob:; connect-src 'self' https://prompt.always200.com https://** http://** ws://** wss://**; frame-src https://prompt.always200.com https://** blob: *; frame-ancestors 'self' https://prompt.always200.com https://** blob: *; worker-src 'self' blob: *; child-src 'self' blob: *"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ]
+  },
+  "plugins": {
+    "shell": {
+      "open": true
+    }
+  }
+}

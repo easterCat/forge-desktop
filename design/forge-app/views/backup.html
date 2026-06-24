@@ -1,0 +1,23 @@
+<div class="section-header"><h2>Backup & Restore</h2>
+  <div class="btn-group">
+    <button class="btn btn-secondary btn-sm" onclick="showNotification('Backup settings opened','info')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9"/></svg> Settings</button>
+    <button class="btn btn-primary btn-sm" onclick="showNotification('Creating full backup…','success')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Create Backup</button>
+  </div>
+</div>
+<div class="stats-row" style="grid-template-columns:repeat(3,1fr)">
+  <div class="stat-card tint-warm"><div class="stat-label">Total Backups</div><div class="stat-value">12</div></div>
+  <div class="stat-card tint-cool"><div class="stat-label">Storage Used</div><div class="stat-value">378<span style="font-size:14px;color:var(--fg-ghost)"> MB</span></div></div>
+  <div class="stat-card tint-soft"><div class="stat-label">Auto-Backup</div><div class="stat-value" style="font-size:18px;color:var(--success)">Daily 03:00</div></div>
+</div>
+<div class="filter-bar">
+  <div class="search-input"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9A9A9A" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" placeholder="Search backups…" id="backupSearch" aria-label="Search backups" oninput="debouncedFilterBackups()"><div class="clear-btn" onclick="document.getElementById('backupSearch').value='';filterBackups()"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#9A9A9A" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg></div></div>
+  <select class="filter-select" id="backupTypeFilter" onchange="filterBackups()">
+    <option value="all">All Types</option>
+    <option value="scheduled">Scheduled</option>
+    <option value="manual">Manual</option>
+    <option value="incremental">Incremental</option>
+    <option value="pre-update">Pre-update</option>
+    <option value="system">System</option>
+  </select>
+</div>
+<div class="settings-grid" id="backupList"></div>

@@ -1,0 +1,189 @@
+/**
+ * Forge Design Tokens — Core Color Roles
+ * Source: design/forge-cross-platform-glass.html :root (lines 13-62)
+ * Single source of truth for all color tokens
+ */
+
+/* ================================================
+   BACKGROUND COLORS
+   ================================================ */
+:root {
+  /* Warm Theme Base (default) */
+  --bg: #F0EDE8;
+  --bg-gradient: linear-gradient(160deg, #EDEAE5 0%, #F2EFE9 25%, #F5F3EF 50%, #F0EDE8 75%, #ECE9E3 100%);
+
+  /* ================================================
+     GLASS LAYER VARIABLES — 6 Layers
+     Design-notes §3.1 (absolute authoritative values)
+     ================================================ */
+
+  /* Window — outermost layer, blur 40px */
+  --glass-window: rgba(255, 255, 255, 0.25);
+  --border-window: rgba(255, 255, 255, 0.18);
+  --border-outer-glow: rgba(255, 255, 255, 0.40);
+
+  /* Sidebar — blur 24px */
+  --glass-sidebar: rgba(255, 255, 255, 0.35);
+
+  /* Topbar — blur 24px */
+  --glass-topbar: rgba(255, 255, 255, 0.38);
+
+  /* Card BG — blur 20px */
+  --glass-bg: rgba(255, 255, 255, 0.45);
+  --glass-bg-hover: rgba(255, 255, 255, 0.58);
+
+  /* Input — blur 16px */
+  --glass-input: rgba(255, 255, 255, 0.40);
+  --glass-input-focus: rgba(255, 255, 255, 0.60);
+
+  /* Inner Effects */
+  --glass-inner-glow: rgba(255, 255, 255, 0.70);
+  --glass-highlight: rgba(255, 255, 255, 0.85);
+
+  /* ================================================
+     BORDER COLORS
+     ================================================ */
+  --border: rgba(255, 255, 255, 0.20);
+  --border-hover: rgba(255, 255, 255, 0.35);
+
+  /* ================================================
+     TEXT COLORS
+     ================================================ */
+  --fg: #1A1A1A;
+  --fg-title: #111111;
+  --fg-muted: #5C5C5C;
+  --fg-ghost: #7A7A7A;
+  --fg-white: #1A1A1A;
+
+  /* ================================================
+     ACCENT COLORS
+     ================================================ */
+  --accent: #2D2D2D;
+  --accent-hover: #1A1A1A;
+  --accent-press: #0D0D0D;
+  --accent-glow: rgba(45, 45, 45, 0.12);
+
+  /* ================================================
+     SEMANTIC COLORS
+     ================================================ */
+  --success: #5A8A64;
+  --error: #B85A42;
+  --info: #5A6B7A;
+  --warn: #B8944A;
+
+  /* ================================================
+     TINT ATMOSPHERE COLORS — 4 Variants
+     Design-notes §3.2 (unified hue rgba(195,178,155))
+     ================================================ */
+  --tint-warm: rgba(195, 178, 155, 0.12);
+  --tint-cool: rgba(195, 178, 155, 0.10);
+  --tint-soft: rgba(195, 178, 155, 0.14);
+  --tint-amber: rgba(195, 178, 155, 0.08);
+
+  /* ================================================
+     TYPOGRAPHY
+     ================================================ */
+  --font-display: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+
+  /* ================================================
+     LAYOUT
+     ================================================ */
+  --sidebar-w: 240px;
+  --topbar-h: 64px;
+
+  /* ================================================
+     BORDER RADIUS
+     ================================================ */
+  --radius: 18px;
+  --radius-sm: 12px;
+  --radius-lg: 24px;
+  --radius-xl: 28px;
+
+  /* ================================================
+     SHADOWS
+     ================================================ */
+  --shadow: 0 2px 16px rgba(0, 0, 0, 0.04);
+  --shadow-hover: 0 8px 32px rgba(0, 0, 0, 0.07);
+  --shadow-btn: 0 1px 4px rgba(0, 0, 0, 0.06);
+  --shadow-window: 0 16px 48px rgba(0, 0, 0, 0.10), 0 4px 16px rgba(0, 0, 0, 0.04);
+  --shadow-inner: inset 0 1px 2px rgba(0, 0, 0, 0.03);
+
+  /* ================================================
+     EASING & TIMING
+     ================================================ */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --t-fast: 150ms var(--ease);
+  --t-base: 200ms var(--ease);
+  --t-slow: 300ms var(--ease);
+
+  /* ================================================
+     Z-INDEX LAYER SYSTEM
+     ================================================ */
+  --z-sidebar: 10;
+  --z-topbar: 10;
+  --z-dropdown: 100;
+  --z-modal-backdrop: 200;
+  --z-modal: 300;
+  --z-toast: 400;
+  --z-tooltip: 500;
+}
+
+/* ================================================
+   MIDNIGHT DARK THEME — Dark Baseline
+   ================================================ */
+:root[data-theme="midnight"],
+[data-theme="midnight"] {
+  /* Background */
+  --bg: #1A1D24;
+  --bg-gradient: linear-gradient(160deg, #1A1D24 0%, #1E2228 50%, #1A1D24 100%);
+
+  /* Glass Layers (design-notes §3.1 dark baseline) */
+  --glass-window: rgba(255, 255, 255, 0.03);
+  --glass-sidebar: rgba(255, 255, 255, 0.04);
+  --glass-topbar: rgba(255, 255, 255, 0.04);
+  --glass-bg: rgba(255, 255, 255, 0.06);
+  --glass-bg-hover: rgba(255, 255, 255, 0.10);
+  --glass-input: rgba(255, 255, 255, 0.08);
+  --glass-input-focus: rgba(255, 255, 255, 0.12);
+  --glass-inner-glow: rgba(255, 255, 255, 0.15);
+  --glass-highlight: rgba(255, 255, 255, 0.20);
+
+  /* Borders */
+  --border: rgba(255, 255, 255, 0.10);
+  --border-hover: rgba(255, 255, 255, 0.18);
+  --border-window: rgba(255, 255, 255, 0.06);
+  --border-outer-glow: rgba(255, 255, 255, 0.08);
+
+  /* Text */
+  --fg: #E0E4EC;
+  --fg-title: #ECEFF5;
+  --fg-muted: #9CA3AF;
+  --fg-ghost: #6B7280;
+  --fg-white: #FFFFFF;
+
+  /* Accent (from prototype JS selectTheme('midnight')) */
+  --accent: #5A9A7A;
+  --accent-hover: #6AAA8A;
+  --accent-press: #4A8A6A;
+  --accent-glow: rgba(90, 154, 122, 0.15);
+
+  /* Semantic */
+  --success: #5A9A7A;
+  --error: #C06050;
+  --info: #6A7B8A;
+  --warn: #7A8AAA;
+
+  /* Tint (dark mode — reduced opacity per design-notes §3.2) */
+  --tint-warm: rgba(195, 178, 155, 0.06);
+  --tint-cool: rgba(195, 178, 155, 0.05);
+  --tint-soft: rgba(195, 178, 155, 0.07);
+  --tint-amber: rgba(195, 178, 155, 0.04);
+
+  /* Shadows */
+  --shadow: 0 2px 16px rgba(0, 0, 0, 0.20);
+  --shadow-hover: 0 8px 32px rgba(0, 0, 0, 0.30);
+  --shadow-window: 0 16px 48px rgba(0, 0, 0, 0.40), 0 4px 16px rgba(0, 0, 0, 0.20);
+  --shadow-inner: inset 0 1px 2px rgba(0, 0, 0, 0.15);
+}

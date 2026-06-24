@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <!-- MiMo Code Icon - MM -->
+  <defs>
+    <linearGradient id="mimoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF6900"/>
+      <stop offset="100%" style="stop-color:#E55A00"/>
+    </linearGradient>
+  </defs>
+  <!-- Brand color circle background -->
+  <circle cx="24" cy="24" r="22" fill="#111113" opacity="0.9"/>
+  <circle cx="24" cy="24" r="22" fill="none" stroke="url(#mimoGrad)" stroke-width="2"/>
+  <!-- Initials "MM" -->
+  <text x="24" y="30" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="16" font-weight="700" fill="#FF6900">MM</text>
+</svg>

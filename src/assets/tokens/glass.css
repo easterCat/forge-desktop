@@ -1,0 +1,186 @@
+/**
+ * Forge Design Tokens — Glass Layer Variables
+ * 优化后的玻璃态效果，更清晰的层级
+ */
+
+/* ================================================
+   WARM THEME — Light Baseline (default)
+   ================================================ */
+:root {
+  /* Window — outermost layer, blur 40px */
+  --glass-window: rgba(255, 255, 255, 0.25);
+  --glass-window-blur: 40px;
+  --glass-window-saturation: 1.3;
+
+  /* Sidebar — blur 24px */
+  --glass-sidebar: rgba(255, 255, 255, 0.40);
+  --glass-sidebar-blur: 24px;
+  --glass-sidebar-saturation: 1.2;
+
+  /* Topbar — blur 24px */
+  --glass-topbar: rgba(255, 255, 255, 0.40);
+  --glass-topbar-blur: 24px;
+  --glass-topbar-saturation: 1.2;
+
+  /* Card BG — blur 20px */
+  --glass-bg: rgba(255, 255, 255, 0.45);
+  --glass-bg-hover: rgba(255, 255, 255, 0.58);
+  --glass-bg-blur: 20px;
+  --glass-bg-saturation: 1.2;
+
+  /* Input — blur 16px */
+  --glass-input: rgba(255, 255, 255, 0.40);
+  --glass-input-focus: rgba(255, 255, 255, 0.60);
+  --glass-input-blur: 16px;
+  --glass-input-saturation: 1.2;
+
+  /* Inner Effects */
+  --glass-inner-glow: rgba(255, 255, 255, 0.70);
+  --glass-highlight: rgba(255, 255, 255, 0.85);
+
+  /* Window Frame */
+  --glass-frame-bg: rgba(255, 255, 255, 0.32);
+  --glass-frame-blur: 40px;
+  --glass-frame-saturation: 1.3;
+
+  /* Liquid Glass — Dynamic Sheen */
+  --glass-sheen: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.00) 0%,
+    rgba(255, 255, 255, 0.06) 40%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.06) 60%,
+    rgba(255, 255, 255, 0.00) 100%
+  );
+  --glass-sheen-hover: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.00) 0%,
+    rgba(255, 255, 255, 0.10) 35%,
+    rgba(255, 255, 255, 0.18) 50%,
+    rgba(255, 255, 255, 0.10) 65%,
+    rgba(255, 255, 255, 0.00) 100%
+  );
+  --glass-sheen-active: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.00) 0%,
+    rgba(255, 255, 255, 0.04) 45%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.04) 55%,
+    rgba(255, 255, 255, 0.00) 100%
+  );
+}
+
+/* ================================================
+   MIDNIGHT THEME — Dark Baseline
+   优化暗色主题的玻璃透明度
+   ================================================ */
+:root[data-theme="midnight"],
+[data-theme="midnight"] {
+  /* Window — outermost layer */
+  --glass-window: rgba(255, 255, 255, 0.04);
+
+  /* Sidebar */
+  --glass-sidebar: rgba(255, 255, 255, 0.05);
+
+  /* Topbar */
+  --glass-topbar: rgba(255, 255, 255, 0.05);
+
+  /* Card BG — 提高暗色主题卡片可见度 */
+  --glass-bg: rgba(255, 255, 255, 0.08);
+  --glass-bg-hover: rgba(255, 255, 255, 0.12);
+
+  /* Input */
+  --glass-input: rgba(255, 255, 255, 0.10);
+  --glass-input-focus: rgba(255, 255, 255, 0.15);
+
+  /* Inner Effects */
+  --glass-inner-glow: rgba(255, 255, 255, 0.18);
+  --glass-highlight: rgba(255, 255, 255, 0.25);
+
+  /* Window Frame */
+  --glass-frame-bg: rgba(255, 255, 255, 0.06);
+
+  /* Liquid Glass — Dynamic Sheen (dark) */
+  --glass-sheen: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.00) 0%,
+    rgba(255, 255, 255, 0.03) 40%,
+    rgba(255, 255, 255, 0.06) 50%,
+    rgba(255, 255, 255, 0.03) 60%,
+    rgba(255, 255, 255, 0.00) 100%
+  );
+  --glass-sheen-hover: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.00) 0%,
+    rgba(255, 255, 255, 0.05) 35%,
+    rgba(255, 255, 255, 0.10) 50%,
+    rgba(255, 255, 255, 0.05) 65%,
+    rgba(255, 255, 255, 0.00) 100%
+  );
+  --glass-sheen-active: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.00) 0%,
+    rgba(255, 255, 255, 0.02) 45%,
+    rgba(255, 255, 255, 0.04) 50%,
+    rgba(255, 255, 255, 0.02) 55%,
+    rgba(255, 255, 255, 0.00) 100%
+  );
+}
+
+/* ================================================
+   FROSTED GLASS UTILITY CLASSES
+   ================================================ */
+.glass-frosted {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-bg-blur)) saturate(var(--glass-bg-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-bg-blur)) saturate(var(--glass-bg-saturation));
+  border: 1px solid var(--border);
+  box-shadow:
+    0 2px 16px rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 var(--glass-inner-glow);
+}
+
+.glass-frosted:hover {
+  background: var(--glass-bg-hover);
+  border-color: var(--border-hover);
+}
+
+/* ================================================
+   LIQUID GLASS — Dynamic Sheen Overlay
+   CSS-only light reflection on glass surfaces
+   ================================================ */
+.liquid-glass {
+  position: relative;
+  overflow: hidden;
+}
+
+.liquid-glass::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--glass-sheen);
+  border-radius: inherit;
+  pointer-events: none;
+  transition: background 0.3s ease, opacity 0.3s ease;
+  opacity: 0.6;
+  z-index: 1;
+  will-change: opacity;
+}
+
+.liquid-glass:hover::after {
+  background: var(--glass-sheen-hover);
+  opacity: 1;
+}
+
+.liquid-glass:active::after {
+  background: var(--glass-sheen-active);
+  opacity: 0.8;
+  transition-duration: 0.1s;
+}
+
+/* Reduced motion: disable sheen animation, keep static sheen */
+@media (prefers-reduced-motion: reduce) {
+  .liquid-glass::after {
+    transition: none;
+  }
+}

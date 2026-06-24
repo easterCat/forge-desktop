@@ -1,0 +1,37 @@
+// SVG Icons for Forge
+// Auto-generated from src/assets/icons/ui/
+// Usage: import { DashboardIcon, SearchIcon } from '@/components/icons'
+
+export { default as DashboardIcon } from './nav/DashboardIcon.vue'
+export { default as CliToolsIcon } from './nav/CliToolsIcon.vue'
+export { default as SoftwareIcon } from './nav/SoftwareIcon.vue'
+export { default as PluginsIcon } from './nav/PluginsIcon.vue'
+export { default as SkillsIcon } from './nav/SkillsIcon.vue'
+export { default as McpServersIcon } from './nav/McpServersIcon.vue'
+export { default as RulesIcon } from './nav/RulesIcon.vue'
+export { default as BackupIcon } from './nav/BackupIcon.vue'
+export { default as ImportExportIcon } from './nav/ImportExportIcon.vue'
+
+export { default as SettingsIcon } from './action/SettingsIcon.vue'
+export { default as SearchIcon } from './action/SearchIcon.vue'
+export { default as RefreshIcon } from './action/RefreshIcon.vue'
+export { default as AddIcon } from './action/AddIcon.vue'
+export { default as EditIcon } from './action/EditIcon.vue'
+export { default as DeleteIcon } from './action/DeleteIcon.vue'
+export { default as DownloadIcon } from './action/DownloadIcon.vue'
+export { default as UploadIcon } from './action/UploadIcon.vue'
+export { default as MoreIcon } from './action/MoreIcon.vue'
+export { default as ChevronDownIcon } from './action/ChevronDownIcon.vue'
+export { default as ChevronRightIcon } from './action/ChevronRightIcon.vue'
+export { default as ExternalLinkIcon } from './action/ExternalLinkIcon.vue'
+export { default as GitBranchIcon } from './action/GitBranchIcon.vue'
+export { default as PackageIcon } from './action/PackageIcon.vue'
+
+export { default as SuccessIcon } from './status/SuccessIcon.vue'
+export { default as ErrorIcon } from './status/ErrorIcon.vue'
+export { default as WarningIcon } from './status/WarningIcon.vue'
+export { default as InfoIcon } from './status/InfoIcon.vue'
+
+export { default as FolderIcon } from './file/FolderIcon.vue'
+export { default as DocumentIcon } from './file/DocumentIcon.vue'
+export { default as CodeIcon } from './file/CodeIcon.vue'

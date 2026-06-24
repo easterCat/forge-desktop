@@ -1,0 +1,20 @@
+<div class="section-header"><h2>Agents</h2><span class="count" id="agentsCount">11 agents</span></div>
+<div class="filter-bar">
+  <div class="search-input"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9A9A9A" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" placeholder="Search agents…" id="agentsSearch" aria-label="Search agents" oninput="debouncedFilterAgents()"><div class="clear-btn" onclick="document.getElementById('agentsSearch').value='';filterAgents()"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#9A9A9A" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg></div></div>
+  <select class="filter-select" id="agentDeptFilter" onchange="filterAgents()">
+    <option value="all">All Departments</option>
+    <option value="engineering">Engineering</option>
+    <option value="design">Design</option>
+    <option value="product">Product</option>
+    <option value="quality">Quality</option>
+    <option value="custom">Custom</option>
+  </select>
+  <select class="filter-select" id="agentSourceFilter" onchange="filterAgents()">
+    <option value="all">All Sources</option>
+    <option value="agency-agents-zh">agency-agents-zh</option>
+    <option value="custom">Custom</option>
+  </select>
+  <div class="btn-group"><button class="btn btn-secondary btn-sm" onclick="openModal('createAgentModal')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Create Agent</button>
+  <button class="btn btn-primary btn-sm" onclick="showNotification('Importing from agency-agents-zh…','success')">Import agency-agents-zh</button></div>
+</div>
+<div class="agents-grid" id="agentsList"></div>

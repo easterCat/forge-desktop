@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Warm glass background -->
+    <linearGradient id="warmBgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#F5F3F0"/>
+      <stop offset="50%" style="stop-color:#EDEAE6"/>
+      <stop offset="100%" style="stop-color:#F2F0EC"/>
+    </linearGradient>
+
+    <!-- Warm amber accent glow -->
+    <radialGradient id="warmGlow" cx="80%" cy="80%" r="50%" fx="80%" fy="80%">
+      <stop offset="0%" style="stop-color:#F59E0B;stop-opacity:0.12"/>
+      <stop offset="100%" style="stop-color:#F59E0B;stop-opacity:0"/>
+    </radialGradient>
+
+    <!-- Main symbol: dark charcoal for contrast on light -->
+    <linearGradient id="warmSymbolGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#2D2D2D"/>
+      <stop offset="100%" style="stop-color:#1A1A1A"/>
+    </linearGradient>
+
+    <!-- Symbol shadow -->
+    <filter id="warmSymbolShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="20" flood-color="#000000" flood-opacity="0.12"/>
+    </filter>
+
+    <!-- Grid pattern -->
+    <pattern id="warmGridPattern" width="64" height="64" patternUnits="userSpaceOnUse">
+      <rect width="64" height="64" fill="none"/>
+      <path d="M 64 0 L 0 0 0 64" fill="none" stroke="rgba(0,0,0,0.03)" stroke-width="1"/>
+    </pattern>
+
+    <!-- Glass highlight -->
+    <linearGradient id="glassHighlight" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:rgba(255,255,255,0.5)"/>
+      <stop offset="100%" style="stop-color:rgba(255,255,255,0)"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Warm background -->
+  <rect width="1024" height="1024" rx="200" fill="url(#warmBgGrad)"/>
+
+  <!-- Amber glow overlay -->
+  <rect width="1024" height="1024" rx="200" fill="url(#warmGlow)"/>
+
+  <!-- Grid texture -->
+  <rect width="1024" height="1024" rx="200" fill="url(#warmGridPattern)"/>
+
+  <!-- Main Symbol: Bold "F" - dark on light for contrast -->
+  <g transform="translate(512, 512)" filter="url(#warmSymbolShadow)">
+
+    <!-- Horizontal bar 1 (top, thickest) - 650px wide -->
+    <rect x="-325" y="-280" width="650" height="100" rx="16" fill="url(#warmSymbolGrad)"/>
+
+    <!-- Horizontal bar 2 (middle) - 500px wide -->
+    <rect x="-250" y="-100" width="500" height="80" rx="12" fill="url(#warmSymbolGrad)"/>
+
+    <!-- Horizontal bar 3 (lower) - 350px wide -->
+    <rect x="-175" y="60" width="350" height="60" rx="10" fill="url(#warmSymbolGrad)"/>
+
+    <!-- Vertical stem - connects all bars -->
+    <rect x="-325" y="-280" width="90" height="400" rx="16" fill="url(#warmSymbolGrad)"/>
+
+    <!-- Terminal cursor accent on top bar (">") - amber for brand continuity -->
+    <g fill="#F59E0B" transform="translate(220, -230)">
+      <path d="M0,0 L50,30 L0,60 Z"/>
+    </g>
+
+    <!-- Energy sparks - amber accents -->
+    <circle cx="340" cy="-230" r="16" fill="#F59E0B"/>
+    <circle cx="280" cy="-230" r="10" fill="#F59E0B" opacity="0.7"/>
+    <circle cx="340" cy="-60" r="12" fill="#F59E0B" opacity="0.8"/>
+    <circle cx="200" cy="90" r="10" fill="#F59E0B" opacity="0.6"/>
+  </g>
+
+  <!-- Corner accent marks - dark charcoal -->
+  <g fill="none" stroke="#2D2D2D" stroke-width="6" stroke-linecap="round" opacity="0.4">
+    <!-- Top-left corner bracket -->
+    <path d="M180,200 L180,160 L220,160"/>
+    <!-- Bottom-right corner bracket -->
+    <path d="M844,824 L844,864 L804,864"/>
+  </g>
+
+  <!-- Subtle top highlight -->
+  <ellipse cx="512" cy="150" rx="350" ry="80" fill="url(#glassHighlight)" opacity="0.3"/>
+</svg>

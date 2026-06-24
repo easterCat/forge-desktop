@@ -1,0 +1,61 @@
+<div class="section-header"><h2>MCP Servers</h2><span class="count" id="mcpCount">10 servers</span></div>
+<div class="tab-bar" id="mcpTabs">
+  <div class="tab-item active" onclick="switchMCPTab('services',this)">Services <span style="font-family:var(--font-mono);font-size:11px;opacity:0.5">10</span></div>
+  <div class="tab-item" onclick="switchMCPTab('groups',this)">Groups</div>
+  <div class="tab-item" onclick="switchMCPTab('audit',this)">Audit Log</div>
+</div>
+<div id="mcp-services">
+  <div class="filter-bar">
+    <div class="search-input"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9A9A9A" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" placeholder="Search MCP servers…" id="mcpSearch" aria-label="Search MCP servers" oninput="debouncedFilterMCP()"><div class="clear-btn" onclick="document.getElementById('mcpSearch').value='';filterMCP()"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#9A9A9A" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg></div></div>
+    <select class="filter-select" id="mcpHealthFilter" onchange="filterMCP()">
+      <option value="all">All Status</option>
+      <option value="healthy">Healthy</option>
+      <option value="unhealthy">Unreachable</option>
+    </select>
+    <select class="filter-select" id="mcpAuthFilter" onchange="filterMCP()">
+      <option value="all">All Auth</option>
+      <option value="none">No Auth</option>
+      <option value="oauth">OAuth</option>
+      <option value="token">Token</option>
+    </select>
+    <div class="btn-group"><button class="btn btn-secondary btn-sm" onclick="showNotification('Discovering MCP services…','info')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4"/></svg> Discover</button>
+    <button class="btn btn-primary btn-sm" onclick="openModal('addMCPModal')">+ Add Server</button></div>
+  </div>
+  <div class="card-grid" id="mcpList"></div>
+</div>
+<div id="mcp-groups" style="display:none">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+    <p style="font-size:13px;color:var(--fg-muted)">Organize MCP servers into logical groups for easier management.</p>
+    <button class="btn btn-primary btn-sm" onclick="showNotification('Create group dialog','info')">+ Create Group</button>
+  </div>
+  <div class="group-chips">
+    <div class="group-chip active">All <span class="count">3</span></div>
+    <div class="group-chip">Development <span class="count">2</span></div>
+    <div class="group-chip">CI/CD <span class="count">1</span></div>
+  </div>
+  <div class="tool-grid" id="mcpGroupsList"></div>
+</div>
+<div id="mcp-audit" style="display:none">
+  <div class="filter-bar">
+    <div class="search-input"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9A9A9A" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" placeholder="Search audit log…"><div class="clear-btn"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#9A9A9A" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg></div></div>
+    <select class="filter-select">
+      <option value="all">All Actions</option>
+      <option value="install">Install</option>
+      <option value="uninstall">Uninstall</option>
+      <option value="health_check">Health Check</option>
+      <option value="sync">Sync</option>
+    </select>
+  </div>
+  <div class="card" style="padding:0;overflow:hidden">
+    <table class="audit-table">
+      <thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Service</th><th>Status</th><th>Details</th></tr></thead>
+      <tbody>
+        <tr><td style="font-family:var(--font-mono)">2026-06-18 14:32</td><td>user</td><td><span class="badge info">health_check</span></td><td>git</td><td><span class="badge success">OK</span></td><td style="font-family:var(--font-mono)">latency: 12ms</td></tr>
+        <tr><td style="font-family:var(--font-mono)">2026-06-18 14:30</td><td>user</td><td><span class="badge warn">install</span></td><td>node_repl</td><td><span class="badge success">OK</span></td><td>stdio://node-repl-mcp</td></tr>
+        <tr><td style="font-family:var(--font-mono)">2026-06-18 14:28</td><td>system</td><td><span class="badge error">health_check</span></td><td>gitlab</td><td><span class="badge error">FAIL</span></td><td>connection timeout</td></tr>
+        <tr><td style="font-family:var(--font-mono)">2026-06-18 13:15</td><td>user</td><td><span class="badge info">sync</span></td><td>git</td><td><span class="badge success">OK</span></td><td>synced to cursor</td></tr>
+        <tr><td style="font-family:var(--font-mono)">2026-06-18 12:00</td><td>system</td><td><span class="badge info">health_check</span></td><td>all</td><td><span class="badge success">2/3</span></td><td>periodic check</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>

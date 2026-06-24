@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Background gradient: void black to carbon surface -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#111113"/>
+      <stop offset="100%" style="stop-color:#0A0A0B"/>
+    </linearGradient>
+
+    <!-- Amber glow from top-left -->
+    <radialGradient id="ambientGlow" cx="20%" cy="20%" r="60%" fx="20%" fy="20%">
+      <stop offset="0%" style="stop-color:#F59E0B;stop-opacity:0.08"/>
+      <stop offset="100%" style="stop-color:#F59E0B;stop-opacity:0"/>
+    </radialGradient>
+
+    <!-- Main symbol fill gradient -->
+    <linearGradient id="symbolGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FBBF24"/>
+      <stop offset="100%" style="stop-color:#F59E0B"/>
+    </linearGradient>
+
+    <!-- Symbol shadow for depth -->
+    <filter id="symbolShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="12" stdDeviation="24" flood-color="#000000" flood-opacity="0.5"/>
+    </filter>
+
+    <!-- Subtle inner glow on symbol -->
+    <filter id="symbolGlow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Grid pattern for texture -->
+    <pattern id="gridPattern" width="64" height="64" patternUnits="userSpaceOnUse">
+      <rect width="64" height="64" fill="none"/>
+      <path d="M 64 0 L 0 0 0 64" fill="none" stroke="rgba(255,255,255,0.025)" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <!-- Background base -->
+  <rect width="1024" height="1024" rx="200" fill="url(#bgGrad)"/>
+
+  <!-- Ambient amber glow overlay -->
+  <rect width="1024" height="1024" rx="200" fill="url(#ambientGlow)"/>
+
+  <!-- Grid texture -->
+  <rect width="1024" height="1024" rx="200" fill="url(#gridPattern)"/>
+
+  <!-- Main Symbol: Bold "F" representing Forge -->
+  <!-- Design: Large geometric "F" made of horizontal bars + vertical stem -->
+  <!-- Occupies ~650px width for strong small-size visibility -->
+  <g transform="translate(512, 512)" filter="url(#symbolShadow)">
+
+    <!-- Horizontal bar 1 (top, thickest) - 650px wide -->
+    <rect x="-325" y="-280" width="650" height="100" rx="16" fill="url(#symbolGrad)" filter="url(#symbolGlow)"/>
+
+    <!-- Horizontal bar 2 (middle) - 500px wide -->
+    <rect x="-250" y="-100" width="500" height="80" rx="12" fill="url(#symbolGrad)"/>
+
+    <!-- Horizontal bar 3 (lower) - 350px wide -->
+    <rect x="-175" y="60" width="350" height="60" rx="10" fill="url(#symbolGrad)"/>
+
+    <!-- Vertical stem - connects all bars -->
+    <rect x="-325" y="-280" width="90" height="400" rx="16" fill="url(#symbolGrad)"/>
+
+    <!-- Terminal cursor accent on top bar (">") -->
+    <g fill="#0A0A0B" transform="translate(220, -230)">
+      <!-- Cursor triangle -->
+      <path d="M0,0 L50,30 L0,60 Z"/>
+    </g>
+
+    <!-- Energy sparks (simple dots for small-size recognition) -->
+    <circle cx="340" cy="-230" r="16" fill="#FBBF24"/>
+    <circle cx="280" cy="-230" r="10" fill="#FBBF24" opacity="0.7"/>
+    <circle cx="340" cy="-60" r="12" fill="#FBBF24" opacity="0.8"/>
+    <circle cx="200" cy="90" r="10" fill="#FBBF24" opacity="0.6"/>
+  </g>
+
+  <!-- Corner accent marks (subtle terminal aesthetic) -->
+  <g fill="none" stroke="#F59E0B" stroke-width="6" stroke-linecap="round" opacity="0.5">
+    <!-- Top-left corner bracket -->
+    <path d="M180,200 L180,160 L220,160"/>
+    <!-- Bottom-right corner bracket -->
+    <path d="M844,824 L844,864 L804,864"/>
+  </g>
+
+  <!-- Subtle reflection at top -->
+  <ellipse cx="512" cy="150" rx="350" ry="80" fill="rgba(255,255,255,0.015)"/>
+</svg>

@@ -1,0 +1,23 @@
+/**
+ * Forge Design Tokens — Slate Theme
+ * Neutral stone
+ */
+:root[data-theme="slate"] {
+  --bg: #F0F0EE; --bg-gradient: linear-gradient(160deg, #ECECEA 0%, #EFEEEC 25%, #F2F2F0 50%, #F0F0EE 75%, #EAEAE8 100%);
+  --border: rgba(255,255,255,0.20); --border-hover: rgba(255,255,255,0.35); --border-window: rgba(255,255,255,0.18); --border-outer-glow: rgba(255,255,255,0.40);
+  --fg: #2A2A28; --fg-title: #1A1A18; --fg-muted: #6A6A68; --fg-ghost: #A8A8A6; --fg-white: #2A2A28;
+  --accent: #6A7A6A; --accent-hover: #5A6A5A; --accent-press: #4A5A4A; --accent-glow: rgba(106,122,106,0.12);
+  --success: #6A8A6A; --error: #B85A42; --info: #7A8A7A; --warn: #8A8A7A;
+  --tint-warm: rgba(175,175,165,0.12); --tint-cool: rgba(165,165,155,0.10); --tint-soft: rgba(185,185,175,0.14); --tint-amber: rgba(165,165,145,0.08);
+  --sidebar-w: 240px; --topbar-h: 64px; --radius: 18px; --radius-sm: 12px; --radius-lg: 24px; --radius-xl: 28px;
+  --shadow: 0 2px 16px rgba(0,0,0,0.04); --shadow-hover: 0 8px 32px rgba(0,0,0,0.07); --shadow-btn: 0 1px 4px rgba(0,0,0,0.06);
+  --shadow-window: 0 16px 48px rgba(0,0,0,0.10),0 4px 16px rgba(0,0,0,0.04); --shadow-inner: inset 0 1px 2px rgba(0,0,0,0.03);
+  --ease: cubic-bezier(0.4,0,0.2,1); --t-fast: 150ms var(--ease); --t-base: 200ms var(--ease); --t-slow: 300ms var(--ease);
+}
+:root[data-theme="slate"] body, :root[data-theme="slate"] html {
+  background: var(--bg);
+  background-image: linear-gradient(160deg,#ECECEA 0%,#EFEEEC 25%,#F2F2F0 50%,#F0F0EE 75%,#EAEAE8 100%),radial-gradient(ellipse 120% 80% at 0% 0%,rgba(165,165,155,0.20) 0%,transparent 50%),radial-gradient(ellipse 100% 80% at 100% 100%,rgba(145,145,135,0.18) 0%,transparent 50%),radial-gradient(ellipse 80% 60% at 60% 30%,rgba(175,175,165,0.12) 0%,transparent 45%),linear-gradient(rgba(0,0,0,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,0.025) 1px,transparent 1px),linear-gradient(rgba(0,0,0,0.015) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,0.015) 1px,transparent 1px);
+  background-size: 100% 100%,100% 100%,100% 100%,100% 100%,24px 24px,24px 24px,96px 96px,96px 96px; background-attachment: fixed;
+}
+:root[data-theme="slate"] body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index:0; background: radial-gradient(ellipse 70% 50% at 10% 15%,rgba(155,155,145,0.15) 0%,transparent 50%),radial-gradient(ellipse 60% 50% at 90% 80%,rgba(135,135,125,0.12) 0%,transparent 50%),radial-gradient(ellipse 50% 40% at 50% 50%,rgba(165,165,155,0.08) 0%,transparent 45%); }
+:root[data-theme="slate"] body::after { content:''; position:fixed; inset:0; pointer-events:none; z-index:0; opacity:0.18; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E"); background-size: 400px 400px; will-change: auto; }

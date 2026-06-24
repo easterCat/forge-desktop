@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forge — AI Env Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="forge.css">
+</head>
+<body>
+<div class="window-frame">
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="5" fill="#2D2D2D"/><rect x="6" y="6" width="12" height="12" rx="2" fill="rgba(255,255,255,0.40)"/><rect x="8" y="8" width="8" height="8" rx="1.5" fill="#F5F3F0"/><rect x="10" y="10" width="4" height="4" rx="1" fill="#B8944A"/></svg><span>Forge</span></div>
+      <nav class="sidebar-nav">
+        <div class="nav-section"><div class="nav-section-title">Overview</div><div class="nav-item active" data-view="dashboard" title="Dashboard"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span class="nav-label">Dashboard</span></div></div>
+        <div class="nav-section"><div class="nav-section-title">Manage</div><div class="nav-item" data-view="cli-tools" title="CLI Tools"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg><span class="nav-label">CLI Tools</span> <span class="nav-badge">10</span></div><div class="nav-item" data-view="software" title="Software"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg><span class="nav-label">Software</span> <span class="nav-badge">12</span></div><div class="nav-item" data-view="plugins" title="Plugins"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg><span class="nav-label">Plugins</span> <span class="nav-badge">12</span></div><div class="nav-item" data-view="skills" title="Skills"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg><span class="nav-label">Skills</span> <span class="nav-badge">15</span></div><div class="nav-item" data-view="agents" title="Agents"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span class="nav-label">Agents</span> <span class="nav-badge">11</span></div><div class="nav-item" data-view="mcp" title="MCP Servers"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4"/></svg><span class="nav-label">MCP Servers</span> <span class="nav-badge">10</span></div><div class="nav-item" data-view="rules" title="Rules"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg><span class="nav-label">Rules</span> <span class="nav-badge">10</span></div></div>
+        <div class="nav-section"><div class="nav-section-title">Data</div><div class="nav-item" data-view="backup" title="Backup & Restore"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span class="nav-label">Backup & Restore</span></div><div class="nav-item" data-view="import-export" title="Import / Export"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg><span class="nav-label">Import / Export</span></div></div>
+      </nav>
+      <div class="sidebar-footer"><div class="avatar">R</div><div><div style="font-size:12px;color:var(--fg-muted);font-weight:500">rhino</div><div style="font-size:10px;color:var(--fg-ghost);font-family:var(--font-mono)">Local only · v0.1.0</div></div></div>
+    </aside>
+    <div class="main">
+      <div class="topbar"><button class="btn-icon sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar" aria-label="Toggle sidebar" style="margin-right:8px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button><span class="topbar-subtitle" id="topbarSubtitle"></span><div class="topbar-spacer"></div><div class="topbar-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9A9A9A" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" placeholder="Search configs, plugins, rules…" id="globalSearch" aria-label="Search configs, plugins, and rules"></div><button class="topbar-btn secondary" onclick="navigateTo('settings')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button><button class="topbar-btn primary" onclick="showNotification('Refresh complete — 0 changes detected','success')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>Refresh</button></div>
+      <div class="content" id="contentArea">
+        <!-- View content loaded dynamically by router -->
+      </div>
+    </div>
+  </div>
+  <!-- Mobile bottom tab bar -->
+  <nav class="mobile-tabbar" aria-label="Mobile navigation">
+    <div class="mobile-tab-item active" data-view="dashboard" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Home</div>
+    <div class="mobile-tab-item" data-view="cli-tools" aria-label="CLI Tools"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>CLI</div>
+    <div class="mobile-tab-item" data-view="plugins" aria-label="Plugins"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>Plugins</div>
+    <div class="mobile-tab-item" data-view="skills" aria-label="Skills"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Skills</div>
+    <div class="mobile-tab-item" style="position:relative" aria-label="More options" onclick="toggleMobileMore(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>More</div>
+  </nav>
+  <!-- Mobile "More" dropdown -->
+  <div id="mobileMoreMenu" style="display:none;position:fixed;bottom:56px;left:0;right:0;background:rgba(255,255,255,0.50);backdrop-filter:blur(24px) saturate(1.3);-webkit-backdrop-filter:blur(24px) saturate(1.3);border-top:1px solid rgba(255,255,255,0.30);z-index:101;padding:8px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+      <div class="mobile-more-item" data-view="agents"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Agents</div>
+      <div class="mobile-more-item" data-view="mcp"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4"/></svg>MCP Servers</div>
+      <div class="mobile-more-item" data-view="rules"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Rules</div>
+      <div class="mobile-more-item" data-view="backup"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Backup</div>
+      <div class="mobile-more-item" data-view="software"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>Software</div>
+      <div class="mobile-more-item" data-view="settings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9"/></svg>Settings</div>
+    </div>
+  </div>
+</div>
+
+<!-- Modals -->
+<div class="modal-overlay" id="pluginDetailModal" role="dialog" aria-modal="true" style="display:none" onclick="if(event.target===this)closeModal('pluginDetailModal')">
+  <div class="modal" style="width:640px">
+    <h3 id="pluginDetailTitle">Plugin Details</h3>
+    <div class="cap-grid" id="pluginCapGrid">
+      <div class="cap-card"><div class="cap-count">3</div><div class="cap-label">Skills</div></div>
+      <div class="cap-card"><div class="cap-count">2</div><div class="cap-label">Hooks</div></div>
+      <div class="cap-card"><div class="cap-count">1</div><div class="cap-label">Commands</div></div>
+      <div class="cap-card"><div class="cap-count">0</div><div class="cap-label">MCP</div></div>
+      <div class="cap-card"><div class="cap-count">0</div><div class="cap-label">LSP</div></div>
+    </div>
+    <div class="detail-tabs">
+      <div class="detail-tab active">Overview</div>
+      <div class="detail-tab">Skills</div>
+      <div class="detail-tab">Commands</div>
+      <div class="detail-tab">Hooks</div>
+      <div class="detail-tab">MCP</div>
+      <div class="detail-tab">LSP</div>
+    </div>
+    <div style="margin-top:16px">
+      <div class="tab-content" id="pluginTabOverview">
+        <p style="font-size:13px;color:var(--fg-muted);line-height:1.6" id="pluginDetailDesc">Plugin description will appear here.</p>
+        <div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div><span style="font-size:11px;color:var(--fg-ghost);text-transform:uppercase;letter-spacing:0.04em">Version</span><div style="font-family:var(--font-mono);font-size:13px;color:var(--fg-muted);margin-top:4px" id="pluginDetailVersion">—</div></div>
+          <div><span style="font-size:11px;color:var(--fg-ghost);text-transform:uppercase;letter-spacing:0.04em">Author</span><div style="font-size:13px;color:var(--fg-muted);margin-top:4px" id="pluginDetailAuthor">—</div></div>
+          <div><span style="font-size:11px;color:var(--fg-ghost);text-transform:uppercase;letter-spacing:0.04em">Software</span><div style="font-size:13px;color:var(--fg-muted);margin-top:4px" id="pluginDetailSoftware">—</div></div>
+          <div><span style="font-size:11px;color:var(--fg-ghost);text-transform:uppercase;letter-spacing:0.04em">Installed</span><div style="font-family:var(--font-mono);font-size:13px;color:var(--fg-muted);margin-top:4px" id="pluginDetailDate">—</div></div>
+        </div>
+      </div>
+      <div class="tab-content" id="pluginTabSkills" style="display:none"><div style="font-size:13px;color:var(--fg-muted)">Skills provided by this plugin will appear here.</div></div>
+      <div class="tab-content" id="pluginTabCommands" style="display:none"><div style="font-size:13px;color:var(--fg-muted)">Commands provided by this plugin will appear here.</div></div>
+      <div class="tab-content" id="pluginTabHooks" style="display:none"><div style="font-size:13px;color:var(--fg-muted)">Hooks configured by this plugin will appear here.</div></div>
+      <div class="tab-content" id="pluginTabMCP" style="display:none"><div style="font-size:13px;color:var(--fg-muted)">MCP servers provided by this plugin will appear here.</div></div>
+      <div class="tab-content" id="pluginTabLSP" style="display:none"><div style="font-size:13px;color:var(--fg-muted)">LSP configurations provided by this plugin will appear here.</div></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('pluginDetailModal')">Close</button>
+      <button class="btn btn-secondary" onclick="showNotification('Path validation passed','success')">Validate Path</button>
+      <button class="btn btn-secondary" onclick="showNotification('Hook executed successfully','success')">Test Hook</button>
+      <button class="btn btn-primary">Uninstall</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="addSourceModal" style="display:none" onclick="if(event.target===this)closeModal('addSourceModal')">
+  <div class="modal">
+    <h3>Add Plugin Source</h3>
+    <label>Repository Type</label>
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <div style="flex:1;padding:16px;border:2px solid var(--accent);border-radius:var(--radius-sm);cursor:pointer;text-align:center;background:rgba(45,45,45,0.04)"><div style="font-size:13px;font-weight:600;color:var(--fg-title)">Market</div><div style="font-size:11px;color:var(--fg-ghost);margin-top:4px">Multi-plugin repository</div></div>
+      <div style="flex:1;padding:16px;border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;text-align:center"><div style="font-size:13px;font-weight:600;color:var(--fg-title)">Resource</div><div style="font-size:11px;color:var(--fg-ghost);margin-top:4px">Single plugin repository</div></div>
+    </div>
+    <label>Repository URL</label>
+    <input type="text" placeholder="https://github.com/user/repo" style="margin-bottom:8px">
+    <label>Branch (optional)</label>
+    <input type="text" placeholder="main" style="margin-bottom:8px">
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('addSourceModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal('addSourceModal');showNotification('Source added successfully','success')">Add Source</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="importSkillModal" style="display:none" onclick="if(event.target===this)closeModal('importSkillModal')">
+  <div class="modal">
+    <h3>Import Skill</h3>
+    <div class="source-tabs" style="margin-top:16px">
+      <div class="source-tab active">ZIP Package</div>
+      <div class="source-tab">Local Directory</div>
+      <div class="source-tab">Recommended Sites</div>
+    </div>
+    <div style="border:2px dashed rgba(255,255,255,0.32);border-radius:var(--radius);padding:40px 20px;text-align:center;margin:16px 0;background:rgba(255,255,255,0.30);backdrop-filter:blur(24px) saturate(1.2);-webkit-backdrop-filter:blur(24px) saturate(1.2);">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--fg-ghost)" stroke-width="1.5" stroke-linecap="round" style="margin-bottom:8px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <div style="font-size:13px;color:var(--fg-muted)">Drop skill package here or <span style="color:var(--accent);cursor:pointer;font-weight:600">browse</span></div>
+      <div style="font-size:11px;color:var(--fg-ghost);margin-top:4px">Supports .zip, .tar.gz</div>
+    </div>
+    <label>Install to</label>
+    <select style="width:100%;margin-bottom:8px"><option>Cursor</option><option>Claude Desktop</option><option>Windsurf</option></select>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('importSkillModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal('importSkillModal');showNotification('Skill imported successfully','success')">Import</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="createAgentModal" style="display:none" onclick="if(event.target===this)closeModal('createAgentModal')">
+  <div class="modal" style="width:580px">
+    <h3>Create Custom Agent</h3>
+    <label>Agent Name</label>
+    <input type="text" placeholder="e.g. Code Reviewer">
+    <label>Department</label>
+    <select style="width:100%"><option>Engineering</option><option>Design</option><option>Product</option><option>Quality</option><option>Custom</option></select>
+    <label>Description</label>
+    <textarea rows="3" placeholder="Describe what this agent does…" style="width:100%;resize:vertical"></textarea>
+    <label>Agent Content (Markdown)</label>
+    <textarea rows="6" placeholder="# Agent Name&#10;&#10;You are a …" style="width:100%;resize:vertical;font-family:var(--font-mono);font-size:12px"></textarea>
+    <label>Install Targets</label>
+    <div class="target-chips" style="margin-top:6px">
+      <div class="target-chip selected"><span class="dot"></span> Claude Code</div>
+      <div class="target-chip"><span class="dot"></span> Cursor</div>
+      <div class="target-chip"><span class="dot"></span> Copilot</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('createAgentModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal('createAgentModal');showNotification('Agent created successfully','success')">Create Agent</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="createRuleModal" style="display:none" onclick="if(event.target===this)closeModal('createRuleModal')">
+  <div class="modal">
+    <h3>Create Rule</h3>
+    <label>Rule Name</label>
+    <input type="text" placeholder="e.g. coding-standards.mdc">
+    <label>Type</label>
+    <select style="width:100%"><option value="md">Markdown (.md)</option><option value="mdc">MDC (.mdc)</option></select>
+    <label>Target Software</label>
+    <select style="width:100%"><option>Cursor</option><option>Claude Desktop</option><option>Windsurf</option></select>
+    <label>Content</label>
+    <textarea rows="8" placeholder="# Rule content…" style="width:100%;resize:vertical;font-family:var(--font-mono);font-size:12px"></textarea>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('createRuleModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal('createRuleModal');showNotification('Rule created successfully','success')">Create Rule</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="addMCPModal" style="display:none" onclick="if(event.target===this)closeModal('addMCPModal')">
+  <div class="modal">
+    <h3>Add MCP Server</h3>
+    <label>Server Name</label>
+    <input type="text" placeholder="e.g. my-mcp-server">
+    <label>Endpoint</label>
+    <input type="text" placeholder="stdio://command or https://endpoint">
+    <label>Auth Type</label>
+    <select style="width:100%"><option value="none">None</option><option value="oauth">OAuth</option><option value="token">Token</option></select>
+    <label>Configuration (JSON)</label>
+    <textarea rows="4" placeholder='{"key": "value"}' style="width:100%;resize:vertical;font-family:var(--font-mono);font-size:12px"></textarea>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('addMCPModal')">Cancel</button>
+      <button class="btn btn-secondary" onclick="showNotification('Testing connection…','info')">Test</button>
+      <button class="btn btn-primary" onclick="closeModal('addMCPModal');showNotification('MCP server added','success')">Add Server</button>
+    </div>
+  </div>
+</div>
+
+<div class="confirm-overlay" id="confirmDialog" style="display:none">
+  <div class="confirm-dialog">
+    <h3 id="confirmTitle">Confirm Action</h3>
+    <p id="confirmMessage">Are you sure you want to proceed?</p>
+    <div class="confirm-actions">
+      <button class="btn btn-ghost" onclick="closeConfirm(false)">Cancel</button>
+      <button class="btn btn-primary" id="confirmAction" onclick="closeConfirm(true)">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script src="forge-data.js"></script>
+<script src="forge-app.js"></script>
+<script>
+// === Hash Router ===
+const ROUTES = {
+  'dashboard':      'views/dashboard.html',
+  'cli-tools':      'views/cli-tools.html',
+  'software':       'views/software.html',
+  'plugins':        'views/plugins.html',
+  'skills':         'views/skills.html',
+  'agents':         'views/agents.html',
+  'mcp':            'views/mcp.html',
+  'rules':          'views/rules.html',
+  'backup':         'views/backup.html',
+  'import-export':  'views/import-export.html',
+  'settings':       'views/settings.html'
+};
+
+const VIEW_TITLES = {
+  'dashboard':      'Environment Overview',
+  'cli-tools':      'CLI Tools',
+  'software':       'Software Detection',
+  'plugins':        'Plugins',
+  'skills':         'Skills',
+  'agents':         'Agents',
+  'mcp':            'MCP Servers',
+  'rules':          'Rules',
+  'backup':         'Backup & Restore',
+  'import-export':  'Import / Export',
+  'settings':       'Settings'
+};
+
+let currentView = null;
+const viewCache = {};
+
+async function navigateTo(view) {
+  if (view === currentView) return;
+  const route = ROUTES[view];
+  if (!route) return;
+
+  // Update sidebar active state
+  document.querySelectorAll('.nav-item').forEach(n => {
+    n.classList.toggle('active', n.dataset.view === view);
+  });
+  // Update mobile tabs
+  document.querySelectorAll('.mobile-tab-item').forEach(t => {
+    t.classList.toggle('active', t.dataset.view === view);
+  });
+  closeMobileMore();
+
+  // Update topbar subtitle
+  document.getElementById('topbarSubtitle').textContent = VIEW_TITLES[view] || '';
+
+  // Load view content
+  const contentArea = document.getElementById('contentArea');
+  contentArea.innerHTML = '<div class="empty-state"><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-line medium"></div><div class="skeleton skeleton-line short"></div></div>';
+
+  try {
+    let html;
+    if (viewCache[view]) {
+      html = viewCache[view];
+    } else {
+      const resp = await fetch(route);
+      if (!resp.ok) throw new Error('Failed to load ' + route);
+      html = await resp.text();
+      viewCache[view] = html;
+    }
+    contentArea.innerHTML = html;
+    currentView = view;
+    window.location.hash = view;
+
+    // Run view-specific init
+    initView(view);
+  } catch (err) {
+    contentArea.innerHTML = '<div class="error-state"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--error)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="error-msg"><strong>Error loading view:</strong> ' + err.message + '</div></div>';
+  }
+}
+
+function renderCurrentView() {
+  if (currentView) initView(currentView);
+}
+
+function initView(view) {
+  switch(view) {
+    case 'dashboard':
+      document.getElementById('cliToolsDashboard').innerHTML = cliTools.filter(t => t.installed).map(renderCLITool).join('');
+      break;
+    case 'cli-tools':
+      document.getElementById('cliToolsListFull').innerHTML = cliTools.map(renderCLITool).join('');
+      break;
+    case 'software':
+      document.getElementById('softwareList').innerHTML = software.map(renderSoftware).join('');
+      break;
+    case 'plugins':
+      document.getElementById('pluginsList').innerHTML = plugins.map(renderPlugin).join('');
+      document.getElementById('pluginsCount').textContent = plugins.length + ' installed';
+      renderMarketplace();
+      renderSources();
+      break;
+    case 'skills':
+      document.getElementById('skillsList').innerHTML = skills.map(renderSkill).join('');
+      document.getElementById('skillsCount').textContent = skills.length + ' skills';
+      break;
+    case 'agents':
+      document.getElementById('agentsList').innerHTML = agents.map(renderAgent).join('');
+      document.getElementById('agentsCount').textContent = agents.length + ' agents';
+      break;
+    case 'mcp':
+      document.getElementById('mcpList').innerHTML = mcpServers.map(renderMCPServer).join('');
+      document.getElementById('mcpCount').textContent = mcpServers.length + ' servers';
+      break;
+    case 'rules':
+      document.getElementById('rulesList').innerHTML = rulesFiles.map(renderRule).join('');
+      document.getElementById('rulesCount').textContent = rulesFiles.length + ' files';
+      break;
+    case 'backup':
+      document.getElementById('backupList').innerHTML = backups.map(renderBackup).join('');
+      break;
+    case 'settings':
+      renderThemeGrid();
+      // Restore toggle states
+      ['autoScan','dailyBackup','notifSounds'].forEach(key => {
+        const saved = localStorage.getItem(key);
+        if (saved !== null) {
+          const el = document.querySelector('.toggle[data-setting="'+key+'"]');
+          if (el) {
+            if (saved === 'true') el.classList.add('on');
+            else el.classList.remove('on');
+          }
+        }
+      });
+      // Restore saved theme
+      const savedTheme = localStorage.getItem('selectedTheme');
+      if (savedTheme) selectTheme(savedTheme);
+      break;
+  }
+}
+
+// === Sidebar nav click ===
+document.querySelectorAll('.nav-item[data-view]').forEach(item => {
+  item.addEventListener('click', () => navigateTo(item.dataset.view));
+});
+
+// === Mobile tab click ===
+document.querySelectorAll('.mobile-tab-item[data-view]').forEach(item => {
+  item.addEventListener('click', () => {
+    navigateTo(item.dataset.view);
+    updateMobileTab(item);
+  });
+});
+
+// === Mobile more menu click ===
+document.querySelectorAll('.mobile-more-item[data-view]').forEach(item => {
+  item.addEventListener('click', () => {
+    navigateTo(item.dataset.view);
+    closeMobileMore();
+    updateMobileTab(null);
+  });
+});
+
+// === Restore sidebar state ===
+(function() {
+  const collapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+  if (collapsed) {
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar) sidebar.classList.add('collapsed');
+  }
+})();
+
+// === Init: navigate to hash or dashboard ===
+(function() {
+  const hash = window.location.hash.slice(1);
+  const initial = (hash && ROUTES[hash]) ? hash : 'dashboard';
+  navigateTo(initial);
+})();
+
+// === Hash change listener ===
+window.addEventListener('hashchange', () => {
+  const hash = window.location.hash.slice(1);
+  if (hash && ROUTES[hash] && hash !== currentView) {
+    navigateTo(hash);
+  }
+});
+</script>
+</body>
+</html>
