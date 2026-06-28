@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { invoke } from '@tauri-apps/api/core'
 import { useClientSync } from '../useClientSync'
+import { SUPPORTED_CLIENTS } from '@/types/unified-plugin'
 
 // Mock @tauri-apps/api/core
 vi.mock('@tauri-apps/api/core', () => ({
@@ -53,5 +55,102 @@ describe('useClientSync', () => {
     ]
 
     expect(totalSyncedCount.value).toBe(1)
+  })
+
+  it('should initialize clients from allagents status', async () => {
+    const mockInvoke = vi.mocked(invoke)
+    mockInvoke.mockResolvedValue({
+      installedClients: ['claude', 'cursor'],
+      syncedClients: ['claude']
+    })
+
+    const { clients, initClients, isLoading } = useClientSync()
+
+    await initClients()
+
+    expect(isLoading.value).toBe(false)
+    expect(clients.value.length).toBe(SUPPORTED_CLIENTS.length) // 23 clients
+
+    // 检查 claude 客户端
+    const claude = clients.value.find(c => c.key === 'claude')
+    expect(claude).toBeDefined()
+    expect(claude?.isInstalled).toBe(true)
+    expect(claude?.isSynced).toBe(true)
+    expect(claude?.name).toBe('Claude Code')
+
+    // 检查 cursor 客户端
+    const cursor = clients.value.find(c => c.key === 'cursor')
+    expect(cursor).toBeDefined()
+    expect(cursor?.isInstalled).toBe(true)
+    expect(cursor?.isSynced).toBe(false)
+
+    // 检查未安装的客户端
+    const copilot = clients.value.find(c => c.key === 'copilot')
+    expect(copilot).toBeDefined()
+    expect(copilot?.isInstalled).toBe(false)
+    expect(copilot?.isSynced).toBe(false)
+  })
+
+  it('should set isLoading to true during initClients', async () => {
+    const mockInvoke = vi.mocked(invoke)
+    // Use a deferred promise to check loading state
+    let resolvePromise: (value: unknown) => void
+    mockInvoke.mockImplementation(() =>
+      new Promise((resolve) => { resolvePromise = resolve })
+    )
+
+    const { initClients, isLoading } = useClientSync()
+
+    const promise = initClients()
+    expect(isLoading.value).toBe(true)
+
+    resolvePromise!({ installedClients: [], syncedClients: [] })
+    await promise
+
+    expect(isLoading.value).toBe(false)
+  })
+
+  it('should handle initClients error', async () => {
+    const mockInvoke = vi.mocked(invoke)
+    mockInvoke.mockRejectedValue(new Error('CLI not found'))
+
+    const { initClients, isLoading } = useClientSync()
+
+    await initClients()
+
+    expect(isLoading.value).toBe(false)
+    // toast.error should be called
+  })
+
+  it('should call invoke with allagents_status command', async () => {
+    const mockInvoke = vi.mocked(invoke)
+    mockInvoke.mockResolvedValue({
+      installedClients: [],
+      syncedClients: []
+    })
+
+    const { initClients } = useClientSync()
+
+    await initClients()
+
+    expect(mockInvoke).toHaveBeenCalledWith('allagents_status')
+  })
+
+  it('should set installStatus correctly', async () => {
+    const mockInvoke = vi.mocked(invoke)
+    mockInvoke.mockResolvedValue({
+      installedClients: ['claude'],
+      syncedClients: []
+    })
+
+    const { clients, initClients } = useClientSync()
+
+    await initClients()
+
+    const claude = clients.value.find(c => c.key === 'claude')
+    expect(claude?.installStatus).toBe('installed')
+
+    const copilot = clients.value.find(c => c.key === 'copilot')
+    expect(copilot?.installStatus).toBe('notinstalled')
   })
 })
