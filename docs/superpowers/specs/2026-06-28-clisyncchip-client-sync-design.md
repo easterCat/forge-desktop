@@ -82,9 +82,9 @@ interface UseClientSyncReturn {
 }
 
 interface ClientInfo {
-  key: string           // 客户端标识 (如 'claude', 'cursor')
+  key: ClientType       // 客户端标识 (如 'claude', 'cursor')
   name: string          // 显示名称
-  icon: string          // 图标缩写
+  icon: string          // 图标路径
   color: string         // 颜色
   isInstalled: boolean  // 是否已安装
   isSynced: boolean     // 是否已同步
@@ -94,9 +94,13 @@ interface ClientInfo {
 
 ### 3.2 数据来源
 
-- **ALL_CLIENTS 常量**：提供客户端基础信息（key, name, icon, color）
+- **SUPPORTED_CLIENTS 常量**：提供客户端 key 列表
+- **CLIENT_DISPLAY_NAMES 常量**：提供客户端显示名称
+- **CLIENT_ICONS 常量**：提供客户端图标路径
 - **allagents status 命令**：获取客户端安装状态和同步状态
 - **softwareStore.cliToolStatuses**：辅助验证 CLI 工具安装情况
+
+**注意**：现有常量中没有颜色定义，需要在 `useClientSync` 中添加默认颜色映射，或新增 `CLIENT_COLORS` 常量。
 
 ## 4. 组件实现
 
@@ -218,7 +222,12 @@ const handleClientClick = (client: ClientInfo) => {
 ```typescript
 import { ref, computed, onMounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
-import { ALL_CLIENTS } from '@/types/unified-plugin'
+import {
+  SUPPORTED_CLIENTS,
+  CLIENT_DISPLAY_NAMES,
+  CLIENT_ICONS,
+  type ClientType
+} from '@/types/unified-plugin'
 import { toast } from 'vue-toastification'
 
 export interface ClientInfo {
@@ -229,6 +238,33 @@ export interface ClientInfo {
   isInstalled: boolean
   isSynced: boolean
   installStatus?: 'installing' | 'installed' | 'notinstalled'
+}
+
+// 客户端颜色映射（可后续扩展到 unified-plugin.ts）
+const CLIENT_COLORS: Record<ClientType, string> = {
+  claude: '#D97706',
+  copilot: '#6E40C9',
+  codex: '#10A37F',
+  cursor: '#7C3AED',
+  opencode: '#3B82F6',
+  gemini: '#4285F4',
+  factory: '#F59E0B',
+  ampcode: '#8B5CF6',
+  vscode: '#007ACC',
+  windsurf: '#3B82F6',
+  cline: '#10B981',
+  continue: '#6366F1',
+  roo: '#EC4899',
+  kilo: '#8B5CF6',
+  trae: '#F97316',
+  augment: '#6366F1',
+  zencoder: '#14B8A6',
+  junie: '#84CC16',
+  openhands: '#F59E0B',
+  kiro: '#3B82F6',
+  replit: '#F97316',
+  kimi: '#8B5CF6',
+  universal: '#6B7280'
 }
 
 export function useClientSync() {
@@ -242,11 +278,11 @@ export function useClientSync() {
     isLoading.value = true
     try {
       // 获取 allagents 支持的客户端列表
-      const allClients = ALL_CLIENTS.map(client => ({
-        key: client.key,
-        name: client.name,
-        icon: client.icon,
-        color: client.color,
+      const allClients = SUPPORTED_CLIENTS.map(key => ({
+        key,
+        name: CLIENT_DISPLAY_NAMES[key],
+        icon: CLIENT_ICONS[key],
+        color: CLIENT_COLORS[key],
         isInstalled: false,
         isSynced: false,
         installStatus: 'notinstalled' as const
@@ -440,7 +476,7 @@ src/components/plugins/__tests__/
 
 ### 8.3 依赖文件
 
-- `src/types/unified-plugin.ts`（ALL_CLIENTS 常量）
+- `src/types/unified-plugin.ts`（SUPPORTED_CLIENTS、CLIENT_DISPLAY_NAMES、CLIENT_ICONS 常量）
 - `src-tauri/src/commands/allagents_commands.rs`（allagents_status、allagents_update 命令）
 - `src/stores/software.ts`（CLI 工具状态检测）
 
