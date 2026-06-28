@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import { computed, onMounted } from 'vue'
 import ToolIcon from './ToolIcon.vue'
+import ClientSyncDialog from '../plugins/ClientSyncDialog.vue'
+import { useClientSync } from '@/composables/useClientSync'
 
 export type CliSyncState = 'unsynced' | 'syncing' | 'synced'
 
@@ -18,6 +21,10 @@ interface Props {
   showIcon?: boolean
   /** Show tool name label */
   showLabel?: boolean
+  /** Show sync count chip */
+  showSyncCount?: boolean
+  /** Disabled state */
+  disabled?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -25,48 +32,135 @@ const props = withDefaults(defineProps<Props>(), {
   state: 'unsynced',
   showIcon: true,
   showLabel: true,
+  showSyncCount: true,
+  disabled: false
 })
 
 const emit = defineEmits<{
   click: [toolKey: string, state: CliSyncState]
 }>()
 
-function handleClick() {
-  emit('click', props.toolKey, props.state)
+// 使用组合式函数
+const {
+  clients,
+  totalSyncedCount,
+  isDialogOpen,
+  syncingClient,
+  toggleDialog,
+  toggleSync,
+  syncAll,
+  initClients
+} = useClientSync()
+
+const totalClients = computed(() => clients.value.length)
+
+// 初始化客户端列表
+onMounted(() => {
+  if (props.showSyncCount) {
+    initClients()
+  }
+})
+
+const handleChipClick = () => {
+  if (!props.disabled) {
+    emit('click', props.toolKey, props.state)
+  }
+}
+
+const handleWrapperClick = () => {
+  if (props.showSyncCount && !props.disabled) {
+    toggleDialog()
+  }
+}
+
+const handleToggleSync = (clientKey: string) => {
+  toggleSync(clientKey)
 }
 </script>
 
 <template>
-  <span
-    :class="['cli-sync-chip', state]"
-    @click="handleClick"
-  >
-    <span v-if="showIcon" class="chip-icon">
-      <ToolIcon :tool-key="toolKey" :size="24" />
+  <div class="cli-sync-chip-wrapper" @click="handleWrapperClick">
+    <span
+      :class="['cli-sync-chip', state]"
+      @click.stop="handleChipClick"
+    >
+      <span v-if="showIcon" class="chip-icon">
+        <ToolIcon :tool-key="toolKey" :size="24" />
+      </span>
+      <span v-if="showLabel" class="chip-label">{{ toolName }}</span>
+      <span class="chip-status">
+        <!-- Synced checkmark -->
+        <svg v-if="state === 'synced'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+        <!-- Unsynced sync icon -->
+        <svg v-else-if="state === 'unsynced'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <polyline points="23 4 23 10 17 10" />
+          <polyline points="1 20 1 14 7 14" />
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+        </svg>
+        <!-- Syncing spinner (CSS-driven) -->
+        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <polyline points="23 4 23 10 17 10" />
+          <polyline points="1 20 1 14 7 14" />
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+        </svg>
+      </span>
     </span>
-    <span v-if="showLabel" class="chip-label">{{ toolName }}</span>
-    <span class="chip-status">
-      <!-- Synced checkmark -->
-      <svg v-if="state === 'synced'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
-        <polyline points="20 6 9 17 4 12" />
-      </svg>
-      <!-- Unsynced sync icon -->
-      <svg v-else-if="state === 'unsynced'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-        <polyline points="23 4 23 10 17 10" />
-        <polyline points="1 20 1 14 7 14" />
-        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-      </svg>
-      <!-- Syncing spinner (CSS-driven) -->
-      <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-        <polyline points="23 4 23 10 17 10" />
-        <polyline points="1 20 1 14 7 14" />
-        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-      </svg>
+
+    <!-- 总数 chip -->
+    <span v-if="showSyncCount" class="chip-badge" @click.stop="handleWrapperClick">
+      {{ totalSyncedCount }}/{{ totalClients }}
+      <span class="chip-sync-label">同步</span>
     </span>
-  </span>
+
+    <!-- 客户端同步管理模态框 -->
+    <ClientSyncDialog
+      v-if="isDialogOpen"
+      :clients="clients"
+      :syncing-client="syncingClient"
+      @toggle-sync="handleToggleSync"
+      @close="toggleDialog"
+      @sync-all="syncAll"
+    />
+  </div>
 </template>
 
 <style scoped>
+.cli-sync-chip-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+.chip-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  background: rgba(59, 130, 246, 0.10);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  color: var(--info);
+  cursor: pointer;
+  transition: all var(--t-fast);
+}
+
+.chip-badge:hover {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.35);
+  transform: translateY(-1px);
+}
+
+.chip-sync-label {
+  opacity: 0.8;
+}
+
+/* 原有样式保持不变 */
 .cli-sync-chip {
   display: inline-flex;
   align-items: center;
