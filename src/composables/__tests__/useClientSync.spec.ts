@@ -238,6 +238,43 @@ describe('useClientSync', () => {
     expect(syncingClient.value).toBeNull()
   })
 
+  it('should sync all unsynced installed clients', async () => {
+    const mockInvoke = vi.mocked(invoke)
+    mockInvoke.mockResolvedValue({
+      installedClients: ['claude', 'cursor'],
+      syncedClients: []
+    })
+
+    const { clients, initClients, syncAll } = useClientSync()
+    await initClients()
+
+    // Mock update command
+    mockInvoke.mockResolvedValue({ synced_count: 1, error_count: 0, skipped_count: 0 })
+
+    await syncAll()
+
+    // Both should be synced now
+    const claude = clients.value.find(c => c.key === 'claude')
+    const cursor = clients.value.find(c => c.key === 'cursor')
+    expect(claude?.isSynced).toBe(true)
+    expect(cursor?.isSynced).toBe(true)
+  })
+
+  it('should show info when no clients to sync', async () => {
+    const mockInvoke = vi.mocked(invoke)
+    mockInvoke.mockResolvedValue({
+      installedClients: ['claude'],
+      syncedClients: ['claude']
+    })
+
+    const { initClients, syncAll } = useClientSync()
+    await initClients()
+
+    await syncAll()
+
+    expect(toast.info).toHaveBeenCalledWith('没有需要同步的客户端')
+  })
+
   it('should call invoke with correct allagents_update command', async () => {
     const mockInvoke = vi.mocked(invoke)
     mockInvoke.mockResolvedValue({

@@ -96,7 +96,15 @@ export function useClientSync(): UseClientSyncReturn {
   }
 
   const syncAll = async () => {
-    // TODO: Implement sync all logic
+    const unsyncedClients = clients.value.filter(c => c.isInstalled && !c.isSynced)
+    if (unsyncedClients.length === 0) {
+      toast.info('没有需要同步的客户端')
+      return
+    }
+
+    for (const client of unsyncedClients) {
+      await toggleSync(client.key)
+    }
   }
 
   const initClients = async () => {
