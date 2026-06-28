@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { invoke } from '@tauri-apps/api/core'
-import { toast } from 'vue-toastification'
 import { useClientSync } from '../useClientSync'
 import { SUPPORTED_CLIENTS } from '@/types/unified-plugin'
 
@@ -9,15 +8,26 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn()
 }))
 
-// Mock vue-toastification
-vi.mock('vue-toastification', () => ({
-  toast: {
-    success: vi.fn(),
-    error: vi.fn(),
-    warning: vi.fn(),
-    info: vi.fn()
+// Mock showNotification function
+const mockShowNotification = vi.fn()
+vi.mock('vue', async () => {
+  const actual = await vi.importActual('vue')
+  return {
+    ...actual,
+    inject: vi.fn((key: string) => {
+      if (key === 'showNotification') return mockShowNotification
+      return undefined
+    })
   }
-}))
+})
+
+// Create toast mock that uses showNotification
+const toast = {
+  success: (msg: string) => mockShowNotification(msg, 'success'),
+  error: (msg: string) => mockShowNotification(msg, 'error'),
+  warning: (msg: string) => mockShowNotification(msg, 'warn'),
+  info: (msg: string) => mockShowNotification(msg, 'info')
+}
 
 describe('useClientSync', () => {
   beforeEach(() => {
@@ -120,7 +130,7 @@ describe('useClientSync', () => {
     await initClients()
 
     expect(isLoading.value).toBe(false)
-    expect(toast.error).toHaveBeenCalledWith('获取客户端状态失败')
+    expect(mockShowNotification).toHaveBeenCalledWith('获取客户端状态失败', 'error')
   })
 
   it('should call invoke with allagents_status command', async () => {
@@ -191,7 +201,7 @@ describe('useClientSync', () => {
     await toggleSync('claude')
 
     // toast.warning should be called
-    expect(toast.warning).toHaveBeenCalled()
+    expect(mockShowNotification).toHaveBeenCalled()
   })
 
   it('should handle sync error', async () => {
@@ -272,7 +282,7 @@ describe('useClientSync', () => {
 
     await syncAll()
 
-    expect(toast.info).toHaveBeenCalledWith('没有需要同步的客户端')
+    expect(mockShowNotification).toHaveBeenCalledWith('没有需要同步的客户端', 'info')
   })
 
   it('should call invoke with correct allagents_update command', async () => {

@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, inject } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import {
   SUPPORTED_CLIENTS,
@@ -6,7 +6,9 @@ import {
   CLIENT_ICONS,
   type ClientType
 } from '@/types/unified-plugin'
-import { toast } from 'vue-toastification'
+
+// Toast notification function (provided by AppFrame)
+type ShowNotification = (message: string, type?: string) => void
 
 export interface ClientInfo {
   key: ClientType
@@ -62,6 +64,15 @@ export function useClientSync(): UseClientSyncReturn {
   const isDialogOpen = ref(false)
   const syncingClient = ref<string | null>(null)
   const isLoading = ref(false)
+
+  // Inject toast notification function from AppFrame
+  const showNotification = inject<ShowNotification>('showNotification')
+  const toast = {
+    success: (msg: string) => showNotification?.(msg, 'success'),
+    error: (msg: string) => showNotification?.(msg, 'error'),
+    warning: (msg: string) => showNotification?.(msg, 'warn'),
+    info: (msg: string) => showNotification?.(msg, 'info')
+  }
 
   const totalSyncedCount = computed(() => clients.value.filter(c => c.isSynced).length)
 
