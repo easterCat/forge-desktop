@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { invoke } from '@tauri-apps/api/core'
+import { toast } from 'vue-toastification'
 import { useClientSync } from '../useClientSync'
 import { SUPPORTED_CLIENTS } from '@/types/unified-plugin'
 
@@ -119,7 +120,7 @@ describe('useClientSync', () => {
     await initClients()
 
     expect(isLoading.value).toBe(false)
-    // toast.error should be called
+    expect(toast.error).toHaveBeenCalledWith('获取客户端状态失败')
   })
 
   it('should call invoke with allagents_status command', async () => {
