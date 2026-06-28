@@ -39,7 +39,8 @@ describe('CliSyncChip', () => {
         toolKey: 'test',
         toolName: 'Test',
         toolIcon: 'T',
-        state: 'unsynced'
+        state: 'unsynced',
+        showSyncCount: true
       }
     })
 
@@ -66,7 +67,8 @@ describe('CliSyncChip', () => {
         toolKey: 'test',
         toolName: 'Test',
         toolIcon: 'T',
-        state: 'unsynced'
+        state: 'unsynced',
+        showSyncCount: true
       }
     })
 

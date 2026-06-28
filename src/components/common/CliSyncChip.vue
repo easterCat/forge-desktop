@@ -32,7 +32,7 @@ const props = withDefaults(defineProps<Props>(), {
   state: 'unsynced',
   showIcon: true,
   showLabel: true,
-  showSyncCount: true,
+  showSyncCount: false,
   disabled: false
 })
 
