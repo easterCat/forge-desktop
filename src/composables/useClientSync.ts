@@ -70,7 +70,29 @@ export function useClientSync(): UseClientSyncReturn {
   }
 
   const toggleSync = async (clientKey: string) => {
-    // TODO: Implement sync logic
+    const client = clients.value.find(c => c.key === clientKey)
+    if (!client?.isInstalled) {
+      toast.warning(`请先安装 ${client?.name}`)
+      return
+    }
+
+    syncingClient.value = clientKey
+    try {
+      await invoke('allagents_update', { client: clientKey })
+
+      // 更新本地状态
+      const clientIndex = clients.value.findIndex(c => c.key === clientKey)
+      if (clientIndex !== -1) {
+        clients.value[clientIndex].isSynced = !clients.value[clientIndex].isSynced
+      }
+
+      toast.success(`${client?.name} 同步成功`)
+    } catch (error) {
+      console.error('Sync failed:', error)
+      toast.error(`同步失败: ${error}`)
+    } finally {
+      syncingClient.value = null
+    }
   }
 
   const syncAll = async () => {

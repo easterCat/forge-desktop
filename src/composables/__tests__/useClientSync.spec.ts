@@ -154,4 +154,104 @@ describe('useClientSync', () => {
     const copilot = clients.value.find(c => c.key === 'copilot')
     expect(copilot?.installStatus).toBe('notinstalled')
   })
+
+  it('should toggle sync status for installed client', async () => {
+    const mockInvoke = vi.mocked(invoke)
+    mockInvoke.mockResolvedValue({
+      installedClients: ['claude', 'cursor'],
+      syncedClients: []
+    })
+
+    const { clients, initClients, toggleSync } = useClientSync()
+    await initClients()
+
+    // claude is installed but not synced
+    const claudeBefore = clients.value.find(c => c.key === 'claude')
+    expect(claudeBefore?.isSynced).toBe(false)
+
+    // Mock update command
+    mockInvoke.mockResolvedValue({ synced_count: 1, error_count: 0, skipped_count: 0 })
+
+    await toggleSync('claude')
+
+    const claudeAfter = clients.value.find(c => c.key === 'claude')
+    expect(claudeAfter?.isSynced).toBe(true)
+  })
+
+  it('should show warning when trying to sync uninstalled client', async () => {
+    const mockInvoke = vi.mocked(invoke)
+    mockInvoke.mockResolvedValue({
+      installedClients: [],
+      syncedClients: []
+    })
+
+    const { clients, initClients, toggleSync } = useClientSync()
+    await initClients()
+
+    await toggleSync('claude')
+
+    // toast.warning should be called
+    expect(toast.warning).toHaveBeenCalled()
+  })
+
+  it('should handle sync error', async () => {
+    const mockInvoke = vi.mocked(invoke)
+    mockInvoke.mockResolvedValue({
+      installedClients: ['claude'],
+      syncedClients: []
+    })
+
+    const { clients, initClients, toggleSync } = useClientSync()
+    await initClients()
+
+    // Mock update to fail
+    mockInvoke.mockRejectedValue(new Error('Sync failed'))
+
+    await toggleSync('claude')
+
+    // State should not change
+    const claude = clients.value.find(c => c.key === 'claude')
+    expect(claude?.isSynced).toBe(false)
+  })
+
+  it('should set syncingClient during sync operation', async () => {
+    const mockInvoke = vi.mocked(invoke)
+    mockInvoke.mockResolvedValue({
+      installedClients: ['claude'],
+      syncedClients: []
+    })
+
+    const { syncingClient, initClients, toggleSync } = useClientSync()
+    await initClients()
+
+    let resolvePromise: (value: unknown) => void
+    mockInvoke.mockImplementation(() =>
+      new Promise((resolve) => { resolvePromise = resolve })
+    )
+
+    const promise = toggleSync('claude')
+    expect(syncingClient.value).toBe('claude')
+
+    resolvePromise!({ synced_count: 1, error_count: 0, skipped_count: 0 })
+    await promise
+
+    expect(syncingClient.value).toBeNull()
+  })
+
+  it('should call invoke with correct allagents_update command', async () => {
+    const mockInvoke = vi.mocked(invoke)
+    mockInvoke.mockResolvedValue({
+      installedClients: ['claude'],
+      syncedClients: []
+    })
+
+    const { initClients, toggleSync } = useClientSync()
+    await initClients()
+
+    mockInvoke.mockResolvedValue({ synced_count: 1, error_count: 0, skipped_count: 0 })
+
+    await toggleSync('claude')
+
+    expect(mockInvoke).toHaveBeenCalledWith('allagents_update', { client: 'claude' })
+  })
 })
