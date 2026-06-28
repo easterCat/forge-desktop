@@ -291,4 +291,58 @@ describe('useClientSync', () => {
 
     expect(mockInvoke).toHaveBeenCalledWith('allagents_update', { client: 'claude' })
   })
+
+  describe('Integration', () => {
+    it('should complete full sync flow', async () => {
+      const mockInvoke = vi.mocked(invoke)
+
+      // Step 1: Initialize
+      mockInvoke.mockResolvedValue({
+        installedClients: ['claude', 'cursor'],
+        syncedClients: []
+      })
+
+      const { clients, initClients, toggleSync, totalSyncedCount } = useClientSync()
+      await initClients()
+
+      expect(totalSyncedCount.value).toBe(0)
+
+      // Step 2: Sync first client
+      mockInvoke.mockResolvedValue({ synced_count: 1, error_count: 0, skipped_count: 0 })
+      await toggleSync('claude')
+
+      expect(totalSyncedCount.value).toBe(1)
+
+      // Step 3: Sync second client
+      await toggleSync('cursor')
+
+      expect(totalSyncedCount.value).toBe(2)
+    })
+
+    it('should handle partial sync failure', async () => {
+      const mockInvoke = vi.mocked(invoke)
+
+      mockInvoke.mockResolvedValue({
+        installedClients: ['claude', 'cursor'],
+        syncedClients: []
+      })
+
+      const { clients, initClients, toggleSync, totalSyncedCount } = useClientSync()
+      await initClients()
+
+      // First sync succeeds
+      mockInvoke.mockResolvedValue({ synced_count: 1, error_count: 0, skipped_count: 0 })
+      await toggleSync('claude')
+      expect(totalSyncedCount.value).toBe(1)
+
+      // Second sync fails
+      mockInvoke.mockRejectedValue(new Error('Network error'))
+      await toggleSync('cursor')
+
+      // Only first client should be synced
+      expect(totalSyncedCount.value).toBe(1)
+      const cursor = clients.value.find(c => c.key === 'cursor')
+      expect(cursor?.isSynced).toBe(false)
+    })
+  })
 })
