@@ -1567,22 +1567,23 @@ git commit -m "test: add integration tests for sync flow"
 Run: `pnpm test`
 Expected: All tests pass
 
-- [x] **Step 2: Run lint**
+- [ ] **Step 2: Run lint** <!-- UNCHECKED: 未执行 -->
 
-Run: `pnpm lint`
-Expected: No errors
+> **注：** 项目根目录缺少 eslint 配置文件（eslint.config.js 或 .eslintrc），`pnpm lint` 无法正常运行。此步骤需要在添加 eslint 配置后才能执行验证。
 
-- [x] **Step 3: Manual testing**
+- [ ] **Step 3: Manual testing** <!-- UNCHECKED: 需要运行时验证 -->
 
-- [x] 打开插件页面，验证 CliSyncChip 显示总数 chip
-- [x] 点击总数 chip，验证模态框打开
-- [x] 验证已安装客户端显示为可点击状态
-- [x] 验证未安装客户端显示为灰色禁用状态
-- [x] 点击已安装客户端，验证同步操作执行
-- [x] 验证加载动画显示
-- [x] 验证成功/失败提示显示
-- [x] 点击"全部同步"按钮，验证批量同步
-- [x] 关闭模态框，验证正常关闭
+> **注：** 以下手动测试项需要在运行中的应用程序里进行验证，仅通过代码审查无法完成。所有项均为代码审查通过（verified by code reading only），尚未经过运行时确认。
+
+- [ ] 打开插件页面，验证 CliSyncChip 显示总数 chip
+- [ ] 点击总数 chip，验证模态框打开
+- [ ] 验证已安装客户端显示为可点击状态
+- [ ] 验证未安装客户端显示为灰色禁用状态
+- [ ] 点击已安装客户端，验证同步操作执行
+- [ ] 验证加载动画显示
+- [ ] 验证成功/失败提示显示
+- [ ] 点击"全部同步"按钮，验证批量同步
+- [ ] 关闭模态框，验证正常关闭
 
 - [x] **Step 4: Update plan status**
 
