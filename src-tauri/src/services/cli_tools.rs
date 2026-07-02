@@ -19,6 +19,11 @@ pub enum CliToolError {
 
 pub type CliResult<T> = Result<T, CliToolError>;
 
+/// 检测当前操作系统是否为 Windows
+fn is_windows() -> bool {
+    cfg!(target_os = "windows")
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum InstallMethod {
@@ -99,40 +104,74 @@ pub struct CliToolManager;
 // ============== Async Command Execution ==============
 
 /// Async command execution with timeout using tokio
+/// 在 Windows 上，通过 PowerShell 执行命令以支持 .cmd 批处理文件和特殊字符
 async fn run_command_with_timeout_async(
     program: &str,
     args: &[&str],
     timeout: Duration,
 ) -> Option<std::process::Output> {
-    let program = program.to_string();
-    let args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+    if is_windows() {
+        // Windows: 使用 PowerShell 来执行命令，以支持 npm.cmd 等批处理文件和特殊字符
+        let mut full_command = program.to_string();
+        for arg in args {
+            full_command.push(' ');
+            // 对包含特殊字符的参数使用单引号包裹
+            if arg.contains(' ') || arg.contains('@') || arg.contains('/') || arg.contains('"') {
+                full_command.push('\'');
+                full_command.push_str(arg);
+                full_command.push('\'');
+            } else {
+                full_command.push_str(arg);
+            }
+        }
 
-    tokio::select! {
-        result = tokio::process::Command::new(&program)
-            .args(&args)
-            .kill_on_drop(true)
-            .output() => result.ok(),
-        _ = tokio::time::sleep(timeout) => {
-            None
+        tokio::select! {
+            result = tokio::process::Command::new("powershell.exe")
+                .args(["-Command", &format!("& {{ {} }}", full_command)])
+                .kill_on_drop(true)
+                .output() => result.ok(),
+            _ = tokio::time::sleep(timeout) => None
+        }
+    } else {
+        let program = program.to_string();
+        let args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+
+        tokio::select! {
+            result = tokio::process::Command::new(&program)
+                .args(&args)
+                .kill_on_drop(true)
+                .output() => result.ok(),
+            _ = tokio::time::sleep(timeout) => None
         }
     }
 }
 
-/// Async shell command execution
+/// Async shell command execution - 跨平台兼容
 async fn run_shell_async(command: &str, timeout: Duration) -> Option<std::process::Output> {
-    tokio::select! {
-        result = tokio::process::Command::new("sh")
-            .args(["-c", command])
-            .kill_on_drop(true)
-            .output() => result.ok(),
-        _ = tokio::time::sleep(timeout) => {
-            None
+    if is_windows() {
+        // Windows: 使用 PowerShell 来执行 shell 命令
+        tokio::select! {
+            result = tokio::process::Command::new("powershell.exe")
+                .args(["-Command", command])
+                .kill_on_drop(true)
+                .output() => result.ok(),
+            _ = tokio::time::sleep(timeout) => None
+        }
+    } else {
+        tokio::select! {
+            result = tokio::process::Command::new("sh")
+                .args(["-c", command])
+                .kill_on_drop(true)
+                .output() => result.ok(),
+            _ = tokio::time::sleep(timeout) => None
         }
     }
 }
 
 // ============== Legacy Sync Wrapper (for backward compatibility) ==============
 
+/// Sync command execution with timeout
+/// 在 Windows 上，通过 PowerShell 执行命令以支持 .cmd 批处理文件和特殊字符
 fn run_command_with_timeout_sync(
     program: &str,
     args: &[&str],
@@ -141,14 +180,35 @@ fn run_command_with_timeout_sync(
     use std::sync::mpsc;
 
     let (tx, rx) = mpsc::channel();
-    let program = program.to_string();
-    let program_log = program.clone();
-    let args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+    // 转换为 owned 类型，以便移入线程（std::thread::spawn 要求 'static）
+    let program_owned = program.to_string();
+    let args_owned: Vec<String> = args.iter().map(|s| s.to_string()).collect();
 
     std::thread::spawn(move || {
-        let result = Command::new(&program)
-            .args(&args)
-            .output();
+        let result = if is_windows() {
+            // Windows: 使用 PowerShell 来执行命令，以支持 npm.cmd 等批处理文件和特殊字符
+            let mut full_command = program_owned.clone();
+            for arg in &args_owned {
+                full_command.push(' ');
+                // 对包含特殊字符的参数使用单引号包裹
+                if arg.contains(' ') || arg.contains('@') || arg.contains('/') || arg.contains('"') {
+                    full_command.push('\'');
+                    full_command.push_str(arg);
+                    full_command.push('\'');
+                } else {
+                    full_command.push_str(arg);
+                }
+            }
+
+            let ps_command = format!("& {{ {} }}", full_command);
+            Command::new("powershell.exe")
+                .args(["-Command", &ps_command])
+                .output()
+        } else {
+            Command::new(&program_owned)
+                .args(&args_owned)
+                .output()
+        };
         let _ = tx.send(result);
     });
 
@@ -161,7 +221,41 @@ fn run_command_with_timeout_sync(
             // The thread will eventually finish (or not), but we stop waiting.
             log::warn!(
                 "Command {:?} timed out after {:?}, thread may still be running",
-                program_log, timeout
+                program, timeout
+            );
+            None
+        }
+    }
+}
+
+/// Sync shell command execution - 跨平台兼容
+fn run_shell_sync(command: &str, timeout: Duration) -> Option<std::process::Output> {
+    use std::sync::mpsc;
+
+    let (tx, rx) = mpsc::channel();
+    let command = command.to_string();
+    let command_log = command.clone();
+
+    std::thread::spawn(move || {
+        let result = if is_windows() {
+            // Windows: 使用 PowerShell 来执行 shell 命令
+            Command::new("powershell.exe")
+                .args(["-Command", &command])
+                .output()
+        } else {
+            Command::new("sh")
+                .args(["-c", &command])
+                .output()
+        };
+        let _ = tx.send(result);
+    });
+
+    match rx.recv_timeout(timeout) {
+        Ok(result) => result.ok(),
+        Err(_) => {
+            log::warn!(
+                "Shell command {:?} timed out after {:?}",
+                command_log, timeout
             );
             None
         }
@@ -496,7 +590,7 @@ impl CliToolManager {
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
             if let Some(version) = self.parse_npm_version(&stdout, pkg_to_check) {
-                let path = self.get_npm_global_path_sync(pkg_to_check);
+                let path = self.get_npm_global_path_sync(tool_key);
                 return Some((version, path));
             }
         }
@@ -504,28 +598,52 @@ impl CliToolManager {
     }
 
     async fn which_async(&self, binary: &str) -> Option<String> {
-        // Direct which
-        if let Some(output) = run_command_with_timeout_async("which", &[binary], Duration::from_secs(5)).await {
-            if output.status.success() {
-                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                return Some(path);
+        // 使用 where.exe (Windows) 或 which (Unix) 查找可执行文件
+        let output = if is_windows() {
+            run_command_with_timeout_async("where.exe", &[binary], Duration::from_secs(5)).await
+        } else {
+            run_command_with_timeout_async("which", &[binary], Duration::from_secs(5)).await
+        };
+
+        if let Some(out) = output {
+            if out.status.success() {
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                // Windows 的 where 命令可能返回多个路径，取第一个
+                let path = stdout.lines().next()?.trim().to_string();
+                if !path.is_empty() {
+                    return Some(path);
+                }
             }
         }
 
-        // npm global paths
+        // npm global paths fallback
         if let Some(output) = run_command_with_timeout_async("npm", &["root", "-g"], Duration::from_secs(5)).await {
             if output.status.success() {
                 let root_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                let bin_path = root_path.replace("/lib/node_modules", "/bin");
-                let full_path = format!("{}/{}", bin_path, binary);
 
+                // 根据平台获取 npm 全局二进制目录
+                let (bin_dir, separator) = if is_windows() {
+                    // Windows: npm 全局二进制文件直接在 prefix 目录（node_modules 的父目录）
+                    let prefix = std::path::Path::new(&root_path)
+                        .parent()
+                        .map(|p| p.to_string_lossy().to_string())
+                        .unwrap_or_else(|| root_path.clone());
+                    (prefix, "\\")
+                } else {
+                    (root_path.replace("/lib/node_modules", "/bin"), "/")
+                };
+
+                let full_path = format!("{}{}{}", bin_dir, separator, binary);
                 if std::path::Path::new(&full_path).exists() {
                     return Some(full_path);
                 }
 
-                let bin_link = format!("{}/.bin/{}", bin_path, binary);
-                if std::path::Path::new(&bin_link).exists() {
-                    return Some(bin_link);
+                // 尝试 .cmd 文件（Windows npm 全局包的可执行文件）
+                if is_windows() {
+                    let cmd_path = format!("{}.cmd", full_path);
+                    if std::path::Path::new(&cmd_path).exists() {
+                        return Some(cmd_path);
+                    }
                 }
             }
         }
@@ -755,7 +873,7 @@ impl CliToolManager {
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
             if let Some(version) = self.parse_npm_version(&stdout, pkg_to_check) {
-                let path = self.get_npm_global_path_sync(pkg_to_check);
+                let path = self.get_npm_global_path_sync(tool_key);
                 return Some((version, path));
             }
         }
@@ -763,28 +881,52 @@ impl CliToolManager {
     }
 
     fn which_sync(&self, binary: &str) -> Option<String> {
-        // Direct which
-        if let Some(output) = run_command_with_timeout_sync("which", &[binary], Duration::from_secs(5)) {
-            if output.status.success() {
-                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                return Some(path);
+        // 使用 where.exe (Windows) 或 which (Unix) 查找可执行文件
+        let output = if is_windows() {
+            run_command_with_timeout_sync("where.exe", &[binary], Duration::from_secs(5))
+        } else {
+            run_command_with_timeout_sync("which", &[binary], Duration::from_secs(5))
+        };
+
+        if let Some(out) = output {
+            if out.status.success() {
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                // Windows 的 where 命令可能返回多个路径，取第一个
+                let path = stdout.lines().next()?.trim().to_string();
+                if !path.is_empty() {
+                    return Some(path);
+                }
             }
         }
 
-        // npm global paths
+        // npm global paths fallback
         if let Some(output) = run_command_with_timeout_sync("npm", &["root", "-g"], Duration::from_secs(5)) {
             if output.status.success() {
                 let root_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                let bin_path = root_path.replace("/lib/node_modules", "/bin");
-                let full_path = format!("{}/{}", bin_path, binary);
 
+                // 根据平台获取 npm 全局二进制目录
+                let (bin_dir, separator) = if is_windows() {
+                    // Windows: npm 全局二进制文件直接在 prefix 目录（node_modules 的父目录）
+                    let prefix = std::path::Path::new(&root_path)
+                        .parent()
+                        .map(|p| p.to_string_lossy().to_string())
+                        .unwrap_or_else(|| root_path.clone());
+                    (prefix, "\\")
+                } else {
+                    (root_path.replace("/lib/node_modules", "/bin"), "/")
+                };
+
+                let full_path = format!("{}{}{}", bin_dir, separator, binary);
                 if std::path::Path::new(&full_path).exists() {
                     return Some(full_path);
                 }
 
-                let bin_link = format!("{}/.bin/{}", bin_path, binary);
-                if std::path::Path::new(&bin_link).exists() {
-                    return Some(bin_link);
+                // 尝试 .cmd 文件（Windows npm 全局包的可执行文件）
+                if is_windows() {
+                    let cmd_path = format!("{}.cmd", full_path);
+                    if std::path::Path::new(&cmd_path).exists() {
+                        return Some(cmd_path);
+                    }
                 }
             }
         }
@@ -880,7 +1022,7 @@ impl CliToolManager {
         let timeout = Duration::from_secs(tool_config.install_timeout_secs.unwrap_or(300));
 
         let output = if needs_shell {
-            run_command_with_timeout_sync("sh", &["-c", &command], timeout)
+            run_shell_sync(&command, timeout)
         } else {
             let parts = shell_words::split(&command).unwrap_or_else(|_| vec![command.clone()]);
             if parts.is_empty() {
@@ -963,16 +1105,35 @@ impl CliToolManager {
 
     fn parse_npm_version(&self, output: &str, tool_key: &str) -> Option<String> {
         for line in output.lines() {
-            if line.contains("├──") || line.contains("└──") {
-                let full_line = line.replace("├──", "").replace("└──", "").replace("│", "").replace(" ", "");
+            // 支持 Unix 格式: ├── @anthropic-ai/claude-code@1.2.3
+            // 支持 Windows 格式: +-- @anthropic-ai/claude-code@1.2.3
+            if line.contains("├──") || line.contains("└──") || line.contains("+--") || line.contains("\\--") {
+                let full_line = line
+                    .replace("├──", "")
+                    .replace("└──", "")
+                    .replace("│", "")
+                    .replace("+--", "")
+                    .replace("\\--", "")
+                    .replace(" ", "");
+
                 if full_line.contains('@') {
                     if let Some(at_idx) = full_line.rfind('@') {
                         let version = &full_line[at_idx + 1..];
                         let package = &full_line[..at_idx];
-                        if package.contains(tool_key) ||
-                           package.contains(&tool_key.replace("-", "")) ||
-                           (tool_key == "claude-code" && package.contains("claude")) {
-                            if !version.is_empty() && version.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+
+                        // 支持多种包名匹配方式
+                        if package.contains(tool_key)
+                            || package.contains(&tool_key.replace("-", ""))
+                            || (tool_key == "claude-code" && package.contains("claude"))
+                            || (tool_key == "opencode" && package.contains("opencode"))
+                        {
+                            if !version.is_empty()
+                                && version
+                                    .chars()
+                                    .next()
+                                    .map(|c| c.is_ascii_digit())
+                                    .unwrap_or(false)
+                            {
                                 return Some(version.trim_end_matches(' ').to_string());
                             }
                         }
@@ -983,14 +1144,56 @@ impl CliToolManager {
         None
     }
 
-    fn get_npm_global_path_sync(&self, package: &str) -> String {
-        if let Some(output) = run_command_with_timeout_sync("npm", &["root", "-g"], Duration::from_secs(5)) {
+    /// 获取 npm 全局安装的二进制文件路径
+    /// 在 Windows 上，npm 全局二进制文件（.cmd/.exe）直接放在 prefix 目录
+    /// 在 Unix 上，二进制文件在 prefix/bin 目录
+    fn get_npm_global_path_sync(&self, tool_key: &str) -> String {
+        let binary_candidates = self.binary_name_candidates(tool_key);
+
+        if let Some(output) = run_command_with_timeout_sync("npm", &["prefix", "-g"], Duration::from_secs(5)) {
             if output.status.success() {
-                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                return format!("{}/{}", path, package);
+                let prefix = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+                for binary_name in &binary_candidates {
+                    if is_windows() {
+                        // Windows: 二进制文件直接在 prefix 目录，可能有 .cmd 后缀
+                        let cmd_path = format!("{}\\{}.cmd", prefix, binary_name);
+                        if std::path::Path::new(&cmd_path).exists() {
+                            return cmd_path;
+                        }
+                        let exe_path = format!("{}\\{}", prefix, binary_name);
+                        if std::path::Path::new(&exe_path).exists() {
+                            return exe_path;
+                        }
+                    } else {
+                        // Unix: 二进制文件在 prefix/bin 目录
+                        let bin_path = format!("{}/bin/{}", prefix, binary_name);
+                        if std::path::Path::new(&bin_path).exists() {
+                            return bin_path;
+                        }
+                    }
+                }
+
+                // 回退：返回 prefix 目录 + 第一个候选名
+                let first = binary_candidates.first().map(|s| s.as_str()).unwrap_or(tool_key);
+                if is_windows() {
+                    return format!("{}\\{}", prefix, first);
+                } else {
+                    return format!("{}/bin/{}", prefix, first);
+                }
             }
         }
-        format!("/usr/local/lib/node_modules/{}", package)
+
+        // 兜底路径
+        if is_windows() {
+            if let Ok(user) = std::env::var("USERNAME") {
+                format!("C:\\Users\\{}\\AppData\\Roaming\\npm\\{}", user, tool_key)
+            } else {
+                format!("C:\\Users\\Default\\AppData\\Roaming\\npm\\{}", tool_key)
+            }
+        } else {
+            format!("/usr/local/bin/{}", tool_key)
+        }
     }
 }
 
@@ -999,3 +1202,4 @@ impl Default for CliToolManager {
         Self::new()
     }
 }
+
