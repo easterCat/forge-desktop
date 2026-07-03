@@ -6,6 +6,8 @@ import {
   CLIENT_ICONS,
   type ClientType
 } from '@/types/unified-plugin'
+import { useUnifiedPluginStore } from '@/stores/unified-plugin'
+import { useErrorHandler, type AppError } from './useErrorHandler'
 
 // Toast notification function (provided by AppFrame)
 type ShowNotification = (message: string, type?: string) => void
@@ -18,6 +20,22 @@ export interface ClientInfo {
   isInstalled: boolean
   isSynced: boolean
   installStatus?: 'installing' | 'installed' | 'notinstalled'
+}
+
+/** 后端 allagents_status 返回的工作区状态 */
+interface WorkspaceStatus {
+  workspace_path: string
+  clients: string[]
+  plugins: Array<{ name: string; installed: boolean; skills_count: number }>
+  mcp_servers: Array<{ name: string; transport: string; url?: string }>
+  last_sync?: string
+}
+
+/** Tauri 命令执行结果 */
+interface CommandResult {
+  success: boolean
+  data?: any
+  error?: string
 }
 
 // 客户端颜色映射
@@ -53,10 +71,12 @@ export interface UseClientSyncReturn {
   isDialogOpen: ReturnType<typeof ref<boolean>>
   syncingClient: ReturnType<typeof ref<string | null>>
   isLoading: ReturnType<typeof ref<boolean>>
+  currentError: ReturnType<typeof ref<AppError | null>>
   toggleDialog: () => void
   toggleSync: (clientKey: string) => Promise<void>
   syncAll: () => Promise<void>
   initClients: () => Promise<void>
+  clearError: () => void
 }
 
 export function useClientSync(): UseClientSyncReturn {
@@ -74,6 +94,47 @@ export function useClientSync(): UseClientSyncReturn {
     info: (msg: string) => showNotification?.(msg, 'info')
   }
 
+  // 从 unified-plugin store 获取工作区路径
+  const pluginStore = useUnifiedPluginStore()
+
+  // 使用统一错误处理器
+  const { handleError, withRetry, wrapAsync, currentError, clearError } = useErrorHandler()
+
+  // localStorage 键名
+  const SYNCED_CLIENTS_KEY = 'forge_synced_clients'
+
+  // 从 localStorage 加载已同步的客户端列表
+  const loadSyncedClients = (): string[] => {
+    try {
+      const stored = localStorage.getItem(SYNCED_CLIENTS_KEY)
+      return stored ? JSON.parse(stored) : []
+    } catch {
+      return []
+    }
+  }
+
+  // 保存已同步的客户端列表到 localStorage
+  const saveSyncedClients = (syncedKeys: string[]) => {
+    try {
+      localStorage.setItem(SYNCED_CLIENTS_KEY, JSON.stringify(syncedKeys))
+    } catch (error) {
+      handleError(error)
+    }
+  }
+
+  // 清理 localStorage 中的陈旧数据（已不存在于 configuredClients 中的客户端）
+  const cleanupStaleSyncData = (configuredClients: string[]) => {
+    try {
+      const stored = loadSyncedClients()
+      const validKeys = stored.filter(key => configuredClients.includes(key))
+      if (validKeys.length !== stored.length) {
+        localStorage.setItem(SYNCED_CLIENTS_KEY, JSON.stringify(validKeys))
+      }
+    } catch (error) {
+      handleError(error)
+    }
+  }
+
   const totalSyncedCount = computed(() => clients.value.filter(c => c.isSynced).length)
 
   const toggleDialog = () => {
@@ -87,20 +148,46 @@ export function useClientSync(): UseClientSyncReturn {
       return
     }
 
+    // 检查 workspacePath 是否已设置
+    if (!pluginStore.workspacePath) {
+      toast.error('工作区未初始化')
+      return
+    }
+
     syncingClient.value = clientKey
     try {
-      await invoke('allagents_update', { client: clientKey })
+      // 调用 allagents_update，传递必需的 workspacePath 参数
+      // 使用 withRetry 处理可恢复的错误（如网络超时）
+      const result = await withRetry(async () => {
+        const res = await invoke<CommandResult>('allagents_update', {
+          workspacePath: pluginStore.workspacePath,
+          client: clientKey
+        })
+
+        // 检查后端返回的结果
+        if (!res.success) {
+          throw new Error(res.error || '同步失败')
+        }
+
+        return res
+      })
 
       // 更新本地状态
       const clientIndex = clients.value.findIndex(c => c.key === clientKey)
       if (clientIndex !== -1) {
         clients.value[clientIndex].isSynced = !clients.value[clientIndex].isSynced
+
+        // 持久化同步状态到 localStorage
+        const syncedKeys = clients.value
+          .filter(c => c.isSynced)
+          .map(c => c.key)
+        saveSyncedClients(syncedKeys)
       }
 
       toast.success(`${client?.name} 同步成功`)
     } catch (error) {
-      console.error('Sync failed:', error)
-      toast.error(`同步失败: ${error}`)
+      const appError = handleError(error)
+      toast.error(appError.userMessage)
     } finally {
       syncingClient.value = null
     }
@@ -132,18 +219,58 @@ export function useClientSync(): UseClientSyncReturn {
         installStatus: 'notinstalled' as const
       }))
 
-      // 通过 allagents CLI 获取安装状态
-      const status = await invoke<{ installedClients: string[]; syncedClients: string[] }>('allagents_status')
+      // 检查 workspacePath 是否已设置
+      if (!pluginStore.workspacePath) {
+        console.warn('Workspace not initialized, using empty client list')
+        clients.value = allClients
+        return
+      }
 
-      clients.value = allClients.map(client => ({
-        ...client,
-        isInstalled: status.installedClients.includes(client.key),
-        isSynced: status.syncedClients.includes(client.key),
-        installStatus: status.installedClients.includes(client.key) ? 'installed' : 'notinstalled'
-      }))
+      // 通过 allagents CLI 获取工作区状态
+      // 后端返回的是 CommandResult 包装器，需要解包
+      const { data: result, error: invokeError } = await wrapAsync(() =>
+        invoke<CommandResult>('allagents_status', {
+          workspacePath: pluginStore.workspacePath
+        })
+      )
+
+      if (invokeError) {
+        throw invokeError
+      }
+
+      if (!result?.success || !result?.data) {
+        throw new Error(result?.error || '获取工作区状态失败')
+      }
+
+      // 解包 CommandResult，获取实际的 WorkspaceStatus
+      const status: WorkspaceStatus = result.data
+
+      // 使用 status.clients 判断客户端是否已配置/安装
+      const configuredClients = status.clients || []
+
+      // 清理 localStorage 中的陈旧数据
+      cleanupStaleSyncData(configuredClients)
+
+      // 从 localStorage 获取已同步的客户端状态
+      const syncedClientsFromStorage = loadSyncedClients()
+
+      // 优化：使用 Set 提高查找效率
+      const configuredSet = new Set(configuredClients)
+      const syncedSet = new Set(syncedClientsFromStorage)
+
+      clients.value = allClients.map(client => {
+        const isConfigured = configuredSet.has(client.key)
+        return {
+          ...client,
+          isInstalled: isConfigured,
+          // 只有已配置且之前已同步的客户端才标记为已同步
+          isSynced: isConfigured && syncedSet.has(client.key),
+          installStatus: isConfigured ? 'installed' : 'notinstalled'
+        }
+      })
     } catch (error) {
-      console.error('Failed to init clients:', error)
-      toast.error('获取客户端状态失败')
+      const appError = handleError(error)
+      toast.error(appError.userMessage)
     } finally {
       isLoading.value = false
     }
@@ -155,9 +282,11 @@ export function useClientSync(): UseClientSyncReturn {
     isDialogOpen,
     syncingClient,
     isLoading,
+    currentError,
     toggleDialog,
     toggleSync,
     syncAll,
-    initClients
+    initClients,
+    clearError
   }
 }

@@ -11,6 +11,11 @@ pub use db::Database;
 // Re-export InstalledRegistry/InstalledEntry from services layer
 pub use services::{InstalledRegistry, InstalledEntry};
 
+// Re-export AllAgents types
+pub use services::allagents_service::{
+    AllAgentsConfig, AllAgentsService, WorkspaceConfig,
+};
+
 // Re-export model types with explicit paths to avoid ambiguity
 pub use models::{
     Software, Plugin, Skill, McpService, Rule, BackupRecord, ConfigTemplate, FileEntry, Agent,
@@ -113,6 +118,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_os::init())
         .setup(|app| {
             // Initialize file-based logging asynchronously
             let log_dir = dirs::data_local_dir()
@@ -338,6 +344,24 @@ pub fn run() {
             commands::version_manager::switch_version,
             commands::version_manager::set_global_version,
             commands::version_manager::remove_version,
+            // AllAgents commands
+            commands::allagents_commands::allagents_init,
+            commands::allagents_commands::allagents_update,
+            commands::allagents_commands::allagents_status,
+            commands::allagents_commands::allagents_plugin_install,
+            commands::allagents_commands::allagents_plugin_uninstall,
+            commands::allagents_commands::allagents_plugin_list,
+            commands::allagents_commands::allagents_skill_list,
+            commands::allagents_commands::allagents_skill_add,
+            commands::allagents_commands::allagents_skill_remove,
+            commands::allagents_commands::allagents_mcp_add,
+            commands::allagents_commands::allagents_mcp_remove,
+            commands::allagents_commands::allagents_mcp_list,
+            commands::allagents_commands::allagents_mcp_update,
+            commands::allagents_commands::allagents_marketplace_add,
+            commands::allagents_commands::allagents_marketplace_remove,
+            commands::allagents_commands::allagents_marketplace_list,
+            commands::allagents_commands::allagents_generate_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

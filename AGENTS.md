@@ -103,7 +103,7 @@ listen('allagents:event', (event) => {
 
 支持 23 个 AI 客户端的同步：
 - **通用客户端**: Copilot, Codex, OpenCode, Gemini, Amp Code, VS Code, Replit, Kimi
-- **专属客户端**: Claude, Cursor, Factory, Windsurf, Cline, Continue, Roo, Kilo, Trae, Augment, Zencoder, Junie, OpenHands, Kiro
+- **专属客户端**: Codex, Cursor, Factory, Windsurf, Cline, Continue, Roo, Kilo, Trae, Augment, Zencoder, Junie, OpenHands, Kiro
 
 ## 规则
 

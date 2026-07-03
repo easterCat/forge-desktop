@@ -43,3 +43,18 @@ coverage/
 # IDE/Cursor
 .cursor/
 .codegraph/
+
+# Test files
+*.obj
+*.o
+*.pdb
+
+# Build scripts (if not needed in repo)
+# *.bat
+# *.ps1
+# *.sh
+
+# Temp files
+*.tmp
+*.temp
+*.bak

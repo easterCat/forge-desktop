@@ -22,3 +22,4 @@ pub mod mcp_manager;
 pub mod agent;
 pub mod data_transfer;
 pub mod version_manager;
+pub mod allagents_commands;

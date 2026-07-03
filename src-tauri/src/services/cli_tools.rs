@@ -3,6 +3,12 @@ use std::process::Command;
 use std::time::Duration;
 use thiserror::Error;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+use tokio::process::CommandExt as TokioCommandExt;
+
 #[derive(Error, Debug)]
 pub enum CliToolError {
     #[error("IO error: {0}")]
@@ -104,35 +110,27 @@ pub struct CliToolManager;
 // ============== Async Command Execution ==============
 
 /// Async command execution with timeout using tokio
-/// 在 Windows 上，通过 PowerShell 执行命令以支持 .cmd 批处理文件和特殊字符
+/// Windows 上直接执行命令，使用 CREATE_NO_WINDOW 防止控制台弹窗
 async fn run_command_with_timeout_async(
     program: &str,
     args: &[&str],
     timeout: Duration,
 ) -> Option<std::process::Output> {
-    if is_windows() {
-        // Windows: 使用 PowerShell 来执行命令，以支持 npm.cmd 等批处理文件和特殊字符
-        let mut full_command = program.to_string();
-        for arg in args {
-            full_command.push(' ');
-            // 对包含特殊字符的参数使用单引号包裹
-            if arg.contains(' ') || arg.contains('@') || arg.contains('/') || arg.contains('"') {
-                full_command.push('\'');
-                full_command.push_str(arg);
-                full_command.push('\'');
-            } else {
-                full_command.push_str(arg);
-            }
-        }
-
+    #[cfg(target_os = "windows")]
+    {
+        // Windows: 直接执行命令（tokio 可以直接处理 .cmd 文件）
+        // 使用 CREATE_NO_WINDOW 防止控制台弹窗
         tokio::select! {
-            result = tokio::process::Command::new("powershell.exe")
-                .args(["-Command", &format!("& {{ {} }}", full_command)])
+            result = tokio::process::Command::new(program)
+                .args(args)
                 .kill_on_drop(true)
+                .creation_flags(0x08000000u32) // CREATE_NO_WINDOW
                 .output() => result.ok(),
             _ = tokio::time::sleep(timeout) => None
         }
-    } else {
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
         let program = program.to_string();
         let args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
 
@@ -147,17 +145,21 @@ async fn run_command_with_timeout_async(
 }
 
 /// Async shell command execution - 跨平台兼容
+/// Windows 上使用 cmd.exe /c 执行 shell 命令，CREATE_NO_WINDOW 防止弹窗
 async fn run_shell_async(command: &str, timeout: Duration) -> Option<std::process::Output> {
-    if is_windows() {
-        // Windows: 使用 PowerShell 来执行 shell 命令
+    #[cfg(target_os = "windows")]
+    {
         tokio::select! {
-            result = tokio::process::Command::new("powershell.exe")
-                .args(["-Command", command])
+            result = tokio::process::Command::new("cmd.exe")
+                .args(["/C", command])
                 .kill_on_drop(true)
+                .creation_flags(0x08000000u32) // CREATE_NO_WINDOW
                 .output() => result.ok(),
             _ = tokio::time::sleep(timeout) => None
         }
-    } else {
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
         tokio::select! {
             result = tokio::process::Command::new("sh")
                 .args(["-c", command])
@@ -172,6 +174,9 @@ async fn run_shell_async(command: &str, timeout: Duration) -> Option<std::proces
 
 /// Sync command execution with timeout
 /// 在 Windows 上，通过 PowerShell 执行命令以支持 .cmd 批处理文件和特殊字符
+/// 同时添加 CREATE_NO_WINDOW 标志防止控制台弹窗
+/// Sync command execution with timeout
+/// Windows 上直接执行命令，使用 CREATE_NO_WINDOW 防止控制台弹窗
 fn run_command_with_timeout_sync(
     program: &str,
     args: &[&str],
@@ -180,45 +185,28 @@ fn run_command_with_timeout_sync(
     use std::sync::mpsc;
 
     let (tx, rx) = mpsc::channel();
-    // 转换为 owned 类型，以便移入线程（std::thread::spawn 要求 'static）
     let program_owned = program.to_string();
     let args_owned: Vec<String> = args.iter().map(|s| s.to_string()).collect();
 
     std::thread::spawn(move || {
-        let result = if is_windows() {
-            // Windows: 使用 PowerShell 来执行命令，以支持 npm.cmd 等批处理文件和特殊字符
-            let mut full_command = program_owned.clone();
-            for arg in &args_owned {
-                full_command.push(' ');
-                // 对包含特殊字符的参数使用单引号包裹
-                if arg.contains(' ') || arg.contains('@') || arg.contains('/') || arg.contains('"') {
-                    full_command.push('\'');
-                    full_command.push_str(arg);
-                    full_command.push('\'');
-                } else {
-                    full_command.push_str(arg);
-                }
-            }
-
-            let ps_command = format!("& {{ {} }}", full_command);
-            Command::new("powershell.exe")
-                .args(["-Command", &ps_command])
-                .output()
-        } else {
+        #[cfg(target_os = "windows")]
+        let result = {
+            // Windows: 直接执行命令，CREATE_NO_WINDOW 防止控制台弹窗
             Command::new(&program_owned)
                 .args(&args_owned)
+                .creation_flags(0x08000000u32) // CREATE_NO_WINDOW
                 .output()
         };
+        #[cfg(not(target_os = "windows"))]
+        let result = Command::new(&program_owned)
+            .args(&args_owned)
+            .output();
         let _ = tx.send(result);
     });
 
     match rx.recv_timeout(timeout) {
         Ok(result) => result.ok(),
         Err(_) => {
-            // Timeout fired — the thread is still blocking on Command::output().
-            // We cannot kill the child process from here without its PID, but we
-            // can at least drop the receiver so the sender's channel is broken.
-            // The thread will eventually finish (or not), but we stop waiting.
             log::warn!(
                 "Command {:?} timed out after {:?}, thread may still be running",
                 program, timeout
@@ -229,6 +217,7 @@ fn run_command_with_timeout_sync(
 }
 
 /// Sync shell command execution - 跨平台兼容
+/// Windows 上使用 cmd.exe /c 执行 shell 命令，CREATE_NO_WINDOW 防止弹窗
 fn run_shell_sync(command: &str, timeout: Duration) -> Option<std::process::Output> {
     use std::sync::mpsc;
 
@@ -237,16 +226,18 @@ fn run_shell_sync(command: &str, timeout: Duration) -> Option<std::process::Outp
     let command_log = command.clone();
 
     std::thread::spawn(move || {
-        let result = if is_windows() {
-            // Windows: 使用 PowerShell 来执行 shell 命令
-            Command::new("powershell.exe")
-                .args(["-Command", &command])
-                .output()
-        } else {
-            Command::new("sh")
-                .args(["-c", &command])
+        #[cfg(target_os = "windows")]
+        let result = {
+            // Windows: 使用 cmd.exe /c 执行 shell 命令
+            Command::new("cmd.exe")
+                .args(["/C", &command])
+                .creation_flags(0x08000000u32) // CREATE_NO_WINDOW
                 .output()
         };
+        #[cfg(not(target_os = "windows"))]
+        let result = Command::new("sh")
+            .args(["-c", &command])
+            .output();
         let _ = tx.send(result);
     });
 
@@ -654,9 +645,22 @@ impl CliToolManager {
         // Try --version
         if let Some(output) = run_command_with_timeout_async(path, &["--version"], Duration::from_secs(5)).await {
             if output.status.success() {
-                let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                if !version.is_empty() {
-                    return Some(version);
+                let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+
+                // 检查是否包含安装提示或错误信息
+                let combined_output = format!("{} {}", stdout, stderr).to_lowercase();
+                if combined_output.contains("cannot find") ||
+                   combined_output.contains("install") ||
+                   combined_output.contains("not found") ||
+                   combined_output.contains("no such") {
+                    // 跳过包含安装提示的输出，这可能是未配置的工具
+                    log::debug!("Skipping version check for {} - output contains installation prompt", path);
+                    return None;
+                }
+
+                if !stdout.is_empty() {
+                    return Some(stdout);
                 }
             }
         }
@@ -664,9 +668,22 @@ impl CliToolManager {
         // Try -v
         if let Some(output) = run_command_with_timeout_async(path, &["-v"], Duration::from_secs(5)).await {
             if output.status.success() {
-                let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                if !version.is_empty() {
-                    return Some(version);
+                let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+
+                // 检查是否包含安装提示或错误信息
+                let combined_output = format!("{} {}", stdout, stderr).to_lowercase();
+                if combined_output.contains("cannot find") ||
+                   combined_output.contains("install") ||
+                   combined_output.contains("not found") ||
+                   combined_output.contains("no such") {
+                    // 跳过包含安装提示的输出
+                    log::debug!("Skipping version check for {} - output contains installation prompt", path);
+                    return None;
+                }
+
+                if !stdout.is_empty() {
+                    return Some(stdout);
                 }
             }
         }
@@ -936,18 +953,44 @@ impl CliToolManager {
     fn get_version_from_binary_sync(&self, _tool_key: &str, path: &str) -> Option<String> {
         if let Some(output) = run_command_with_timeout_sync(path, &["--version"], Duration::from_secs(5)) {
             if output.status.success() {
-                let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                if !version.is_empty() {
-                    return Some(version);
+                let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+
+                // 检查是否包含安装提示或错误信息
+                let combined_output = format!("{} {}", stdout, stderr).to_lowercase();
+                if combined_output.contains("cannot find") ||
+                   combined_output.contains("install") ||
+                   combined_output.contains("not found") ||
+                   combined_output.contains("no such") {
+                    // 跳过包含安装提示的输出，这可能是未配置的工具
+                    log::debug!("Skipping version check for {} - output contains installation prompt", path);
+                    return None;
+                }
+
+                if !stdout.is_empty() {
+                    return Some(stdout);
                 }
             }
         }
 
         if let Some(output) = run_command_with_timeout_sync(path, &["-v"], Duration::from_secs(5)) {
             if output.status.success() {
-                let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                if !version.is_empty() {
-                    return Some(version);
+                let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+
+                // 检查是否包含安装提示或错误信息
+                let combined_output = format!("{} {}", stdout, stderr).to_lowercase();
+                if combined_output.contains("cannot find") ||
+                   combined_output.contains("install") ||
+                   combined_output.contains("not found") ||
+                   combined_output.contains("no such") {
+                    // 跳过包含安装提示的输出
+                    log::debug!("Skipping version check for {} - output contains installation prompt", path);
+                    return None;
+                }
+
+                if !stdout.is_empty() {
+                    return Some(stdout);
                 }
             }
         }
@@ -1063,6 +1106,12 @@ impl CliToolManager {
     /// known aliases the installer may have created, otherwise the detection
     /// falsely reports the tool as not installed.
     fn binary_name_candidates(&self, tool_key: &str) -> Vec<String> {
+        // copilot: 跳过二进制探测。copilot 未配置时运行 `copilot --version`
+        // 会触发交互式安装提示并弹出终端窗口，所以只通过 npm 检测。
+        if tool_key == "copilot" {
+            return vec![];
+        }
+
         let mut candidates: Vec<String> = match tool_key {
             "claude-code" => vec!["claude".to_string()],
             "gemini-cli" => vec!["gemini".to_string()],
@@ -1078,7 +1127,6 @@ impl CliToolManager {
             "deepseek-reasonix" => vec!["reasonix".to_string()],
             "mimo-code" => vec!["mimo".to_string()],
             "qwen-code" => vec!["qwen-code".to_string()],
-            "copilot" => vec!["copilot".to_string()],
             _ => vec![tool_key.to_string()],
         };
 

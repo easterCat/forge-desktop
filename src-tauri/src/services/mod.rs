@@ -8,6 +8,7 @@ pub mod plugin_capabilities;
 pub mod mcp_bridge;
 pub mod mcp_protocol;
 pub mod plugin_repo_sync;
+pub mod allagents_service;
 
 pub use file_service::*;
 pub use software_scanner::*;

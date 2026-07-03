@@ -17,13 +17,14 @@ tauri = { version = "2.0", features = ["devtools"] }
 tauri-plugin-shell = "2.0"
 tauri-plugin-dialog = "2.0"
 tauri-plugin-http = "2.0"
+tauri-plugin-os = "2.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rusqlite = { version = "0.32", features = ["bundled"] }
 tokio = { version = "1.0", features = ["full"] }
 dirs = "6.0"
 walkdir = "2.5"
-zip = "2.2"
+zip = { version = "2.2", default-features = false, features = ["deflate"] }
 thiserror = "2.0"
 log = "0.4"
 env_logger = "0.11"

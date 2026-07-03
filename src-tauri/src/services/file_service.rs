@@ -184,10 +184,11 @@ impl FileService {
         #[cfg(windows)]
         {
             if target.is_dir() {
-                std::os::windows::fs::symlink_dir(target, link)
+                std::os::windows::fs::symlink_dir(target, link)?;
             } else {
-                std::os::windows::fs::symlink_file(target, link)
+                std::os::windows::fs::symlink_file(target, link)?;
             }
+            Ok(())
         }
         #[cfg(unix)]
         {

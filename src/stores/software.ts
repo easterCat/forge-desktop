@@ -80,6 +80,9 @@ export const useSoftwareStore = defineStore('software', () => {
   const isUninstalling = ref(false);
   const error = ref<string | null>(null);
 
+  // Store pre-installed version information for enhanced detection
+  const installedVersions = ref<Record<string, string>>({});
+
   // Platform filter state
   const selectedPlatform = ref<string>(
     localStorage.getItem('forge-selected-platform') || 'auto'
@@ -108,6 +111,21 @@ export const useSoftwareStore = defineStore('software', () => {
       isLoading.value = true;
       error.value = null;
       const result = await invoke<Software[]>('detect_software');
+      softwareList.value = result;
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to detect software';
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  async function detectSoftwareWithVersions() {
+    try {
+      isLoading.value = true;
+      error.value = null;
+      const result = await invoke<Software[]>('detect_software', {
+        installedVersions: Object.keys(installedVersions.value).length > 0 ? installedVersions.value : null
+      });
       softwareList.value = result;
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to detect software';
@@ -189,8 +207,15 @@ export const useSoftwareStore = defineStore('software', () => {
       error.value = null;
       const result = await invoke<InstallResponse>('install_software', { softwareKey });
       if (result.success) {
-        // Defer software detection to avoid blocking UI
-        runWhenIdle(() => detectSoftware());
+        // Store the installed version for enhanced detection
+        if (result.installedVersion) {
+          installedVersions.value = {
+            ...installedVersions.value,
+            [softwareKey]: result.installedVersion
+          };
+        }
+        // Use enhanced detection with pre-installed version information
+        await detectSoftwareWithVersions();
       }
       return result;
     } catch (e) {

@@ -344,8 +344,8 @@ pub fn detect_cli_skills_paths() -> Vec<String> {
     #[cfg(windows)]
     if let Some(user_profile) = std::env::var_os("USERPROFILE") {
         let windows_paths = vec![
-            PathBuf::from(user_profile).join(".cursor/skills"),
-            PathBuf::from(user_profile).join(".agents/skills"),
+            PathBuf::from(&user_profile).join(".cursor/skills"),
+            PathBuf::from(&user_profile).join(".agents/skills"),
         ];
 
         for path in windows_paths {

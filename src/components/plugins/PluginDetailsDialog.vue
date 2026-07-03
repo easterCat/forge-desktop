@@ -464,6 +464,7 @@
         <button class="btn btn-secondary" @click="$emit('close')">Close</button>
       </div>
     </div>
+    </div>
   </Teleport>
 </template>
 

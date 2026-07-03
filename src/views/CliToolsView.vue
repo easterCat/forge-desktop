@@ -144,7 +144,7 @@
               <!-- Progress Slot -->
               <div class="progress-slot" :class="{ idle: !isOperating(tool.key) }">
                 <div class="progress-bar-wrap">
-                  <div class="progress-bar-fill" :class="getProgressStage(tool.key)" :style="{ width: isOperating(tool.key) ? getProgressPercent(tool.key) + '%' : '100%' }"></div>
+                  <div class="progress-bar-fill" :class="getProgressStage(tool.key)" :style="{ width: isOperating(tool.key) ? getProgressPercent(tool.key) + '%' : '0%' }"></div>
                 </div>
               </div>
             </div>

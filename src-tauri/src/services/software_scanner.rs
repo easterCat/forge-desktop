@@ -3,6 +3,9 @@ use std::path::PathBuf;
 use std::time::Duration;
 use thiserror::Error;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 #[derive(Error, Debug)]
 pub enum ScannerError {
     #[error("IO error: {0}")]
@@ -91,21 +94,16 @@ impl SoftwareScanner {
                 website_url: Some("https://brew.sh".to_string()),
             },
             SoftwareConfig {
-                key: "chocolatey".to_string(),
-                name: "Chocolatey".to_string(),
-                tier: 1,
-                platform: "Windows".to_string(),
-                default_config_paths: vec![
-                    PathBuf::from("C:/ProgramData/chocolatey"),
-                ],
-                website_url: Some("https://chocolatey.org".to_string()),
-            },
-            SoftwareConfig {
                 key: "scoop".to_string(),
                 name: "Scoop".to_string(),
                 tier: 1,
                 platform: "Windows".to_string(),
                 default_config_paths: vec![
+                    // 默认安装路径
+                    dirs::home_dir()
+                        .map(|p| p.join("scoop"))
+                        .unwrap_or_default(),
+                    // 备选路径：.local/share/scoop
                     dirs::home_dir()
                         .map(|p| p.join(".local").join("share").join("scoop"))
                         .unwrap_or_default(),
@@ -113,25 +111,93 @@ impl SoftwareScanner {
                 website_url: Some("https://scoop.sh".to_string()),
             },
             SoftwareConfig {
-                key: "ssh".to_string(),
-                name: "SSH Config".to_string(),
-                tier: 1,
-                platform: "Cross-platform".to_string(),
-                default_config_paths: vec![
-                    dirs::home_dir()
-                        .map(|p| p.join(".ssh"))
-                        .unwrap_or_default(),
-                ],
-                website_url: None,
-            },
-            SoftwareConfig {
                 key: "windows-terminal".to_string(),
                 name: "Windows Terminal".to_string(),
                 tier: 1,
                 platform: "Windows".to_string(),
+                default_config_paths: vec![dirs::home_dir()
+                    .map(|p| {
+                        p.join("AppData")
+                            .join("Local")
+                            .join("Packages")
+                            .join("Microsoft.WindowsTerminal")
+                    })
+                    .unwrap_or_default()],
+                website_url: Some("https://github.com/microsoft/terminal".to_string()),
+            },
+            SoftwareConfig {
+                key: "sudo".to_string(),
+                name: "Sudo".to_string(),
+                tier: 1,
+                platform: "Windows".to_string(),
                 default_config_paths: vec![
+                    // gsudo path
                     dirs::home_dir()
-                        .map(|p| p.join("AppData").join("Local").join("Packages").join("Microsoft.WindowsTerminal"))
+                        .map(|p| p.join("scoop").join("apps").join("gsudo").join("current"))
+                        .unwrap_or_default(),
+                    // sudo path
+                    dirs::home_dir()
+                        .map(|p| p.join("scoop").join("apps").join("sudo").join("current"))
+                        .unwrap_or_default(),
+                ],
+                website_url: Some("https://github.com/gerardog/gsudo".to_string()),
+            },
+            SoftwareConfig {
+                key: "git".to_string(),
+                name: "Git".to_string(),
+                tier: 1,
+                platform: "Cross-platform".to_string(),
+                default_config_paths: vec![
+                    // Scoop installation path
+                    dirs::home_dir()
+                        .map(|p| p.join("scoop").join("apps").join("git").join("current"))
+                        .unwrap_or_default(),
+                    // Git for Windows default path
+                    PathBuf::from("C:\\Program Files\\Git"),
+                    // Portable Git
+                    dirs::home_dir()
+                        .map(|p| p.join("scoop").join("apps").join("git").join("current").join("cmd").join("git.exe"))
+                        .unwrap_or_default(),
+                ],
+                website_url: Some("https://git-scm.com".to_string()),
+            },
+            SoftwareConfig {
+                key: "7zip".to_string(),
+                name: "7-Zip".to_string(),
+                tier: 1,
+                platform: "Cross-platform".to_string(),
+                default_config_paths: vec![
+                    // Scoop installation path
+                    dirs::home_dir()
+                        .map(|p| p.join("scoop").join("apps").join("7zip").join("current"))
+                        .unwrap_or_default(),
+                    // 7-Zip default installation path
+                    PathBuf::from("C:\\Program Files\\7-Zip"),
+                ],
+                website_url: Some("https://www.7-zip.org".to_string()),
+            },
+            SoftwareConfig {
+                key: "switchhosts".to_string(),
+                name: "SwitchHosts".to_string(),
+                tier: 1,
+                platform: "Cross-platform".to_string(),
+                default_config_paths: vec![
+                    // Scoop installation path
+                    dirs::home_dir()
+                        .map(|p| p.join("scoop").join("apps").join("switchhosts").join("current"))
+                        .unwrap_or_default(),
+                ],
+                website_url: Some("https://github.com/oldj/SwitchHosts".to_string()),
+            },
+            SoftwareConfig {
+                key: "colortool".to_string(),
+                name: "ColorTool".to_string(),
+                tier: 1,
+                platform: "Windows".to_string(),
+                default_config_paths: vec![
+                    // Scoop installation path
+                    dirs::home_dir()
+                        .map(|p| p.join("scoop").join("apps").join("colortool").join("current"))
                         .unwrap_or_default(),
                 ],
                 website_url: Some("https://github.com/microsoft/terminal".to_string()),
@@ -141,11 +207,9 @@ impl SoftwareScanner {
                 name: "iTerm2".to_string(),
                 tier: 1,
                 platform: "macOS".to_string(),
-                default_config_paths: vec![
-                    dirs::home_dir()
-                        .map(|p| p.join("Library").join("Application Support").join("iTerm2"))
-                        .unwrap_or_default(),
-                ],
+                default_config_paths: vec![dirs::home_dir()
+                    .map(|p| p.join("Library").join("Application Support").join("iTerm2"))
+                    .unwrap_or_default()],
                 website_url: Some("https://iterm2.com".to_string()),
             },
             SoftwareConfig {
@@ -153,11 +217,9 @@ impl SoftwareScanner {
                 name: "Oh My Posh".to_string(),
                 tier: 1,
                 platform: "Cross-platform".to_string(),
-                default_config_paths: vec![
-                    dirs::home_dir()
-                        .map(|p| p.join(".oh-my-posh.omp.json"))
-                        .unwrap_or_default(),
-                ],
+                default_config_paths: vec![dirs::home_dir()
+                    .map(|p| p.join(".oh-my-posh.omp.json"))
+                    .unwrap_or_default()],
                 website_url: Some("https://ohmyposh.dev".to_string()),
             },
             SoftwareConfig {
@@ -165,14 +227,11 @@ impl SoftwareScanner {
                 name: "VS Code".to_string(),
                 tier: 1,
                 platform: "Cross-platform".to_string(),
-                default_config_paths: vec![
-                    dirs::home_dir()
-                        .map(|p| p.join(".config").join("Code").join("User"))
-                        .unwrap_or_default(),
-                ],
+                default_config_paths: vec![dirs::home_dir()
+                    .map(|p| p.join(".config").join("Code").join("User"))
+                    .unwrap_or_default()],
                 website_url: Some("https://code.visualstudio.com".to_string()),
             },
-
             // Tier 2: Language Version Managers (P1)
             SoftwareConfig {
                 key: "nvm".to_string(),
@@ -180,8 +239,17 @@ impl SoftwareScanner {
                 tier: 2,
                 platform: "Cross-platform".to_string(),
                 default_config_paths: vec![
+                    // Unix/Linux/macOS path
                     dirs::home_dir()
                         .map(|p| p.join(".nvm"))
+                        .unwrap_or_default(),
+                    // Windows: Scoop installation path
+                    dirs::home_dir()
+                        .map(|p| p.join("scoop").join("apps").join("nvm").join("current"))
+                        .unwrap_or_default(),
+                    // Windows: nvm-windows default path
+                    dirs::home_dir()
+                        .map(|p| p.join("AppData").join("Roaming").join("nvm"))
                         .unwrap_or_default(),
                 ],
                 website_url: Some("https://github.com/nvm-sh/nvm".to_string()),
@@ -192,23 +260,16 @@ impl SoftwareScanner {
                 tier: 2,
                 platform: "Cross-platform".to_string(),
                 default_config_paths: vec![
+                    // Unix/Linux/macOS path
                     dirs::home_dir()
                         .map(|p| p.join(".pyenv"))
                         .unwrap_or_default(),
-                ],
-                website_url: Some("https://github.com/pyenv/pyenv".to_string()),
-            },
-            SoftwareConfig {
-                key: "goenv".to_string(),
-                name: "goenv (Go)".to_string(),
-                tier: 2,
-                platform: "Cross-platform".to_string(),
-                default_config_paths: vec![
+                    // Windows: Scoop installation path
                     dirs::home_dir()
-                        .map(|p| p.join(".goenv"))
+                        .map(|p| p.join("scoop").join("apps").join("pyenv").join("current"))
                         .unwrap_or_default(),
                 ],
-                website_url: Some("https://github.com/syndbg/goenv".to_string()),
+                website_url: Some("https://github.com/pyenv/pyenv".to_string()),
             },
             SoftwareConfig {
                 key: "jenv".to_string(),
@@ -216,50 +277,18 @@ impl SoftwareScanner {
                 tier: 2,
                 platform: "Cross-platform".to_string(),
                 default_config_paths: vec![
+                    // Unix/Linux/macOS path
                     dirs::home_dir()
                         .map(|p| p.join(".jenv"))
+                        .unwrap_or_default(),
+                    // Windows: Scoop installation path
+                    dirs::home_dir()
+                        .map(|p| p.join("scoop").join("apps").join("jenv").join("current"))
                         .unwrap_or_default(),
                 ],
                 website_url: Some("https://github.com/jenv/jenv".to_string()),
             },
-            SoftwareConfig {
-                key: "asdf".to_string(),
-                name: "asdf".to_string(),
-                tier: 2,
-                platform: "Cross-platform".to_string(),
-                default_config_paths: vec![
-                    dirs::home_dir()
-                        .map(|p| p.join(".asdf"))
-                        .unwrap_or_default(),
-                ],
-                website_url: Some("https://asdf-vm.com".to_string()),
-            },
-
             // Tier 3: Runtime & Containers (P0)
-            SoftwareConfig {
-                key: "docker".to_string(),
-                name: "Docker".to_string(),
-                tier: 3,
-                platform: "Cross-platform".to_string(),
-                default_config_paths: vec![
-                    dirs::home_dir()
-                        .map(|p| p.join(".docker"))
-                        .unwrap_or_default(),
-                ],
-                website_url: Some("https://www.docker.com".to_string()),
-            },
-            SoftwareConfig {
-                key: "docker-compose".to_string(),
-                name: "Docker Compose".to_string(),
-                tier: 3,
-                platform: "Cross-platform".to_string(),
-                default_config_paths: vec![
-                    dirs::home_dir()
-                        .map(|p| p.join(".docker").join("cli-plugins"))
-                        .unwrap_or_default(),
-                ],
-                website_url: Some("https://docs.docker.com/compose".to_string()),
-            },
             SoftwareConfig {
                 key: "ffmpeg".to_string(),
                 name: "FFmpeg".to_string(),
@@ -271,80 +300,48 @@ impl SoftwareScanner {
                 ],
                 website_url: Some("https://ffmpeg.org".to_string()),
             },
-
             // Tier 4: Debug & Collaboration (P1)
-            SoftwareConfig {
-                key: "apifox".to_string(),
-                name: "Apifox".to_string(),
-                tier: 4,
-                platform: "Cross-platform".to_string(),
-                default_config_paths: vec![
-                    dirs::home_dir()
-                        .map(|p| p.join("Library").join("Application Support").join("Apifox"))
-                        .unwrap_or_default(),
-                ],
-                website_url: Some("https://apifox.com".to_string()),
-            },
             SoftwareConfig {
                 key: "postman".to_string(),
                 name: "Postman".to_string(),
                 tier: 4,
                 platform: "Cross-platform".to_string(),
-                default_config_paths: vec![
-                    dirs::home_dir()
-                        .map(|p| p.join("Library").join("Application Support").join("Postman"))
-                        .unwrap_or_default(),
-                ],
+                default_config_paths: vec![dirs::home_dir()
+                    .map(|p| {
+                        p.join("Library")
+                            .join("Application Support")
+                            .join("Postman")
+                    })
+                    .unwrap_or_default()],
                 website_url: Some("https://www.postman.com".to_string()),
-            },
-            SoftwareConfig {
-                key: "charles".to_string(),
-                name: "Charles Proxy".to_string(),
-                tier: 4,
-                platform: "Cross-platform".to_string(),
-                default_config_paths: vec![
-                    dirs::home_dir()
-                        .map(|p| p.join("Library").join("Application Support").join("Charles"))
-                        .unwrap_or_default(),
-                ],
-                website_url: Some("https://www.charlesproxy.com".to_string()),
             },
             SoftwareConfig {
                 key: "cyberduck".to_string(),
                 name: "Cyberduck (SFTP)".to_string(),
                 tier: 4,
                 platform: "macOS".to_string(),
-                default_config_paths: vec![
-                    dirs::home_dir()
-                        .map(|p| p.join("Library").join("Application Support").join("Cyberduck"))
-                        .unwrap_or_default(),
-                ],
+                default_config_paths: vec![dirs::home_dir()
+                    .map(|p| {
+                        p.join("Library")
+                            .join("Application Support")
+                            .join("Cyberduck")
+                    })
+                    .unwrap_or_default()],
                 website_url: Some("https://cyberduck.io".to_string()),
             },
-            SoftwareConfig {
-                key: "filezilla".to_string(),
-                name: "FileZilla (SFTP)".to_string(),
-                tier: 4,
-                platform: "Cross-platform".to_string(),
-                default_config_paths: vec![
-                    dirs::home_dir()
-                        .map(|p| p.join(".config").join("filezilla"))
-                        .unwrap_or_default(),
-                ],
-                website_url: Some("https://filezilla-project.org".to_string()),
-            },
-
             // Tier 5: Productivity Tools (P2)
             SoftwareConfig {
                 key: "snipaste".to_string(),
                 name: "Snipaste".to_string(),
                 tier: 5,
                 platform: "Cross-platform".to_string(),
-                default_config_paths: vec![
-                    dirs::home_dir()
-                        .map(|p| p.join("Library").join("Application Support").join("Snipaste"))
-                        .unwrap_or_default(),
-                ],
+                default_config_paths: vec![dirs::home_dir()
+                    .map(|p| {
+                        p.join("Library")
+                            .join("Application Support")
+                            .join("Snipaste")
+                    })
+                    .unwrap_or_default()],
                 website_url: Some("https://www.snipaste.com".to_string()),
             },
             SoftwareConfig {
@@ -352,11 +349,13 @@ impl SoftwareScanner {
                 name: "Obsidian".to_string(),
                 tier: 5,
                 platform: "Cross-platform".to_string(),
-                default_config_paths: vec![
-                    dirs::home_dir()
-                        .map(|p| p.join("Library").join("Application Support").join("obsidian"))
-                        .unwrap_or_default(),
-                ],
+                default_config_paths: vec![dirs::home_dir()
+                    .map(|p| {
+                        p.join("Library")
+                            .join("Application Support")
+                            .join("obsidian")
+                    })
+                    .unwrap_or_default()],
                 website_url: Some("https://obsidian.md".to_string()),
             },
             SoftwareConfig {
@@ -364,25 +363,20 @@ impl SoftwareScanner {
                 name: "Excalidraw".to_string(),
                 tier: 5,
                 platform: "Cross-platform".to_string(),
-                default_config_paths: vec![
-                    dirs::home_dir()
-                        .map(|p| p.join(".excalidraw"))
-                        .unwrap_or_default(),
-                ],
+                default_config_paths: vec![dirs::home_dir()
+                    .map(|p| p.join(".excalidraw"))
+                    .unwrap_or_default()],
                 website_url: Some("https://excalidraw.com".to_string()),
             },
-
             // Legacy: AI Tools (from original code)
             SoftwareConfig {
                 key: "cursor".to_string(),
                 name: "Cursor".to_string(),
                 tier: 0,
                 platform: "Cross-platform".to_string(),
-                default_config_paths: vec![
-                    dirs::home_dir()
-                        .map(|p| p.join(".cursor"))
-                        .unwrap_or_default(),
-                ],
+                default_config_paths: vec![dirs::home_dir()
+                    .map(|p| p.join(".cursor"))
+                    .unwrap_or_default()],
                 website_url: None,
             },
             SoftwareConfig {
@@ -390,11 +384,9 @@ impl SoftwareScanner {
                 name: "Windsurf".to_string(),
                 tier: 0,
                 platform: "Cross-platform".to_string(),
-                default_config_paths: vec![
-                    dirs::home_dir()
-                        .map(|p| p.join(".windsurf"))
-                        .unwrap_or_default(),
-                ],
+                default_config_paths: vec![dirs::home_dir()
+                    .map(|p| p.join(".windsurf"))
+                    .unwrap_or_default()],
                 website_url: None,
             },
             SoftwareConfig {
@@ -402,11 +394,9 @@ impl SoftwareScanner {
                 name: "Claude Desktop".to_string(),
                 tier: 0,
                 platform: "Cross-platform".to_string(),
-                default_config_paths: vec![
-                    dirs::home_dir()
-                        .map(|p| p.join(".claude"))
-                        .unwrap_or_default(),
-                ],
+                default_config_paths: vec![dirs::home_dir()
+                    .map(|p| p.join(".claude"))
+                    .unwrap_or_default()],
                 website_url: None,
             },
             SoftwareConfig {
@@ -414,11 +404,9 @@ impl SoftwareScanner {
                 name: "Continue".to_string(),
                 tier: 0,
                 platform: "Cross-platform".to_string(),
-                default_config_paths: vec![
-                    dirs::home_dir()
-                        .map(|p| p.join(".continue"))
-                        .unwrap_or_default(),
-                ],
+                default_config_paths: vec![dirs::home_dir()
+                    .map(|p| p.join(".continue"))
+                    .unwrap_or_default()],
                 website_url: None,
             },
             SoftwareConfig {
@@ -426,11 +414,9 @@ impl SoftwareScanner {
                 name: "Cody".to_string(),
                 tier: 0,
                 platform: "Cross-platform".to_string(),
-                default_config_paths: vec![
-                    dirs::home_dir()
-                        .map(|p| p.join(".cody"))
-                        .unwrap_or_default(),
-                ],
+                default_config_paths: vec![dirs::home_dir()
+                    .map(|p| p.join(".cody"))
+                    .unwrap_or_default()],
                 website_url: None,
             },
         ]);
@@ -444,28 +430,81 @@ impl SoftwareScanner {
 
         use rayon::prelude::*;
 
-        configs.par_iter().map(|config| {
-            self.detect_single_sync(config)
-        }).collect()
+        configs
+            .par_iter()
+            .map(|config| self.detect_single_sync(config))
+            .collect()
+    }
+
+    /// Parallel detection with pre-installed version information
+    /// Used after installation to ensure the newly installed version is captured
+    pub fn detect_software_parallel_with_versions(
+        &self,
+        installed_versions: Option<std::collections::HashMap<String, String>>,
+    ) -> Vec<Software> {
+        let configs = self.get_supported_software();
+        let installed_versions = installed_versions.unwrap_or_default();
+
+        use rayon::prelude::*;
+
+        configs
+            .par_iter()
+            .map(|config| {
+                let mut software = self.detect_single_sync(config);
+
+                // If we have a pre-installed version for this software and it's not detected yet
+                if let Some(version) = installed_versions.get(&config.key) {
+                    if !version.is_empty() {
+                        // If software was not detected as installed, but we have version info
+                        // from the installation command, use that version
+                        if !software.is_installed || software.version.is_none() {
+                            software.is_installed = true;
+                            software.version = Some(version.clone());
+                            software.status = SoftwareStatus::Installed;
+                        }
+                    }
+                }
+
+                software
+            })
+            .collect()
     }
 
     /// Synchronous single software detection (for parallel execution)
     fn detect_single_sync(&self, config: &SoftwareConfig) -> Software {
         // Check all config paths and use the first one that exists
+        // Add retry mechanism for Scoop symbolic links that may take time to create
         let mut config_path = PathBuf::new();
         let mut is_installed = false;
+        let max_retries = 3;
+        let retry_delay = Duration::from_millis(500);
 
-        for path in &config.default_config_paths {
-            if path.exists() {
-                config_path = path.clone();
-                is_installed = true;
+        for _ in 0..max_retries {
+            for path in &config.default_config_paths {
+                if path.exists() {
+                    config_path = path.clone();
+                    is_installed = true;
+                    break;
+                }
+            }
+
+            if is_installed {
                 break;
+            }
+
+            // Wait before retry (only if we have paths to check)
+            if !config.default_config_paths.is_empty() {
+                std::thread::sleep(retry_delay);
             }
         }
 
         // If no path found, use the first one as default
         if config_path == PathBuf::new() {
-            config_path = config.default_config_paths.first().cloned().unwrap_or_default();
+            config_path = config
+                .default_config_paths
+                .first()
+                .cloned()
+                .unwrap_or_default();
         }
 
         let version = if is_installed {
@@ -518,7 +557,11 @@ impl SoftwareScanner {
 
             // If no path found, use the first one as default
             if config_path == PathBuf::new() {
-                config_path = config.default_config_paths.first().cloned().unwrap_or_default();
+                config_path = config
+                    .default_config_paths
+                    .first()
+                    .cloned()
+                    .unwrap_or_default();
             }
 
             let version = if is_installed {
@@ -574,7 +617,11 @@ impl SoftwareScanner {
 
         // If no path found, use the first one as default
         if config_path == PathBuf::new() {
-            config_path = config.default_config_paths.first().cloned().unwrap_or_default();
+            config_path = config
+                .default_config_paths
+                .first()
+                .cloned()
+                .unwrap_or_default();
         }
 
         let version = if is_installed {
@@ -623,19 +670,23 @@ impl SoftwareScanner {
             "continue" => self.detect_continue_version(config_path),
             "cody" => self.detect_cody_version(config_path),
             // Tier 1: Foundation
-            "docker" => self.detect_docker_version(),
             "vscode" => self.detect_vscode_version(),
             "iterm2" => self.detect_iterm2_version(config_path),
             "oh-my-posh" => self.detect_oh_my_posh_version(config_path),
+            "scoop" => self.detect_scoop_version(),
+            "sudo" => self.detect_sudo_version(),
+            "git" => self.detect_git_version(),
+            "7zip" => self.detect_7zip_version(),
+            "switchhosts" => self.detect_switchhosts_version(),
+            "colortool" => self.detect_colortool_version(),
             // Tier 2: Language Managers
             "nvm" => self.detect_nvm_version(),
             "pyenv" => self.detect_pyenv_version(),
+            "jenv" => self.detect_jenv_version(),
             "homebrew" => self.detect_homebrew_version(),
             // Tier 3: Runtime
-            "docker-compose" => self.detect_docker_compose_version(),
             "ffmpeg" => self.detect_ffmpeg_version(),
             // Tier 4: Debug Tools
-            "apifox" => self.detect_apifox_version(config_path),
             "postman" => self.detect_postman_version(config_path),
             // Tier 5: Productivity
             "obsidian" => self.detect_obsidian_version(config_path),
@@ -656,13 +707,12 @@ impl SoftwareScanner {
         // Use a small dedicated thread to enforce a hard timeout without async runtime.
         let handle = std::thread::Builder::new()
             .name(format!("detect-{}", key))
-            .spawn(move || {
-                SoftwareScanner::new().detect_version(&key, &config_path)
-            })
+            .spawn(move || SoftwareScanner::new().detect_version(&key, &config_path))
             .ok()?;
-        // Wait up to 1000ms for the version detection thread.
+        // Wait up to 3000ms for the version detection thread.
+        // Increased from 1000ms to allow newly installed software to initialize
         let start = std::time::Instant::now();
-        let timeout = Duration::from_millis(1000);
+        let timeout = Duration::from_millis(3000);
         loop {
             if handle.is_finished() {
                 return handle.join().ok().flatten();
@@ -704,10 +754,7 @@ impl SoftwareScanner {
     ///   2. Fallback to known standard locations per key.
     ///   3. Otherwise None — never blocks the scan.
     pub fn detect_install_path(&self, key: &str) -> Option<String> {
-        if let Ok(output) = std::process::Command::new("which")
-            .arg(key)
-            .output()
-        {
+        if let Ok(output) = std::process::Command::new("which").arg(key).output() {
             if output.status.success() {
                 let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 if !path.is_empty() {
@@ -719,17 +766,6 @@ impl SoftwareScanner {
     }
 
     // ============ Version Detection Methods ============
-
-    fn detect_docker_version(&self) -> Option<String> {
-        std::process::Command::new("docker")
-            .arg("--version")
-            .output()
-            .ok()
-            .and_then(|output| {
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                stdout.split_whitespace().nth(2).map(|s| s.trim_matches(',').to_string())
-            })
-    }
 
     fn detect_vscode_version(&self) -> Option<String> {
         std::process::Command::new("code")
@@ -772,35 +808,126 @@ impl SoftwareScanner {
     }
 
     fn detect_nvm_version(&self) -> Option<String> {
-        let nvm_sh = dirs::home_dir()?.join(".nvm").join("nvm.sh");
-        if nvm_sh.exists() {
-            std::process::Command::new("bash")
-                .args(["-c", "source ~/.nvm/nvm.sh && nvm --version"])
+        #[cfg(target_os = "windows")]
+        {
+            // Windows: 先尝试获取当前 Node.js 版本（nvm use 设置的版本）
+            // nvm-windows 的 "nvm version" 返回的是 nvm-windows 自身版本，不是 Node 版本
+            // 所以我们直接用 "node -v" 来获取当前活跃的 Node.js 版本
+            let node_output = std::process::Command::new("node")
+                .arg("-v")
                 .output()
-                .ok()
-                .and_then(|output| {
+                .ok();
+
+            if let Some(output) = node_output {
+                if output.status.success() {
                     let stdout = String::from_utf8_lossy(&output.stdout);
-                    let version = stdout.trim();
-                    if version.starts_with('v') {
-                        Some(version.to_string())
+                    let version = stdout.trim().to_string();
+                    if !version.is_empty()
+                        && version.starts_with('v')
+                        && version.len() > 1
+                        && version[1..].chars().next().map_or(false, |c| c.is_ascii_digit())
+                    {
+                        return Some(version);
+                    }
+                }
+            }
+
+            // 回退：尝试通过 nvm current 获取
+            let nvm_output = std::process::Command::new("nvm")
+                .arg("current")
+                .output()
+                .ok();
+
+            nvm_output.and_then(|output| {
+                if output.status.success() {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    let version = stdout.trim().to_string();
+                    // nvm-windows current 输出可能带 "v" 前缀或不带
+                    let version_clean = version.trim_start_matches('v').trim_start_matches('V');
+                    if !version_clean.is_empty()
+                        && version_clean.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false)
+                    {
+                        Some(format!("v{}", version_clean))
                     } else {
                         None
                     }
-                })
-        } else {
-            None
+                } else {
+                    None
+                }
+            })
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            // macOS/Linux: nvm 使用 bash 脚本
+            let nvm_sh = dirs::home_dir()?.join(".nvm").join("nvm.sh");
+            if nvm_sh.exists() {
+                std::process::Command::new("bash")
+                    .args(["-c", "source ~/.nvm/nvm.sh && nvm --version"])
+                    .output()
+                    .ok()
+                    .and_then(|output| {
+                        let stdout = String::from_utf8_lossy(&output.stdout);
+                        let version = stdout.trim();
+                        if version.starts_with('v') {
+                            Some(version.to_string())
+                        } else {
+                            None
+                        }
+                    })
+            } else {
+                None
+            }
         }
     }
 
     fn detect_pyenv_version(&self) -> Option<String> {
-        std::process::Command::new("pyenv")
-            .arg("--version")
-            .output()
-            .ok()
-            .and_then(|output| {
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                stdout.split_whitespace().nth(1).map(|s| s.to_string())
-            })
+        // Windows 上通过 PowerShell 执行，以支持 pyenv.cmd 等批处理文件
+        // 添加 CREATE_NO_WINDOW 标志防止控制台弹窗
+        let output = if cfg!(target_os = "windows") {
+            let flags: u32 = 0x08000000; // CREATE_NO_WINDOW
+            let creation_flags = flags;
+
+            std::process::Command::new("powershell.exe")
+                .args(["-Command", "& { pyenv --version }"])
+                .creation_flags(creation_flags)
+                .output()
+                .ok()
+        } else {
+            std::process::Command::new("pyenv")
+                .arg("--version")
+                .output()
+                .ok()
+        };
+
+        output.and_then(|output| {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            stdout.split_whitespace().nth(1).map(|s| s.to_string())
+        })
+    }
+
+    fn detect_jenv_version(&self) -> Option<String> {
+        // Windows 上通过 PowerShell 执行，以支持 jenv.cmd 等批处理文件
+        // 添加 CREATE_NO_WINDOW 标志防止控制台弹窗
+        let output = if cfg!(target_os = "windows") {
+            let flags: u32 = 0x08000000; // CREATE_NO_WINDOW
+            let creation_flags = flags;
+
+            std::process::Command::new("powershell.exe")
+                .args(["-Command", "& { jenv --version }"])
+                .creation_flags(creation_flags)
+                .output()
+                .ok()
+        } else {
+            std::process::Command::new("jenv")
+                .arg("--version")
+                .output()
+                .ok()
+        };
+
+        output.and_then(|output| {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            stdout.split_whitespace().nth(1).map(|s| s.to_string())
+        })
     }
 
     fn detect_homebrew_version(&self) -> Option<String> {
@@ -810,34 +937,258 @@ impl SoftwareScanner {
             .ok()
             .and_then(|output| {
                 let stdout = String::from_utf8_lossy(&output.stdout);
-                stdout.lines().next()
+                stdout
+                    .lines()
+                    .next()
                     .and_then(|line| line.split_whitespace().nth(1))
                     .map(|s| s.to_string())
             })
     }
 
-    fn detect_docker_compose_version(&self) -> Option<String> {
-        std::process::Command::new("docker")
-            .args(["compose", "version", "--format", "json"])
-            .output()
-            .ok()
-            .and_then(|output| {
-                if output.status.success() {
-                    let stdout = String::from_utf8_lossy(&output.stdout);
-                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(stdout.as_ref()) {
-                        return json.get("Version").and_then(|v| v.as_str()).map(|s| s.to_string());
+    fn detect_scoop_version(&self) -> Option<String> {
+        // 首先检查 Scoop 安装目录是否存在
+        if let Some(home) = dirs::home_dir() {
+            let scoop_dir = home.join("scoop");
+            let scoop_apps_dir = scoop_dir.join("apps").join("scoop").join("current");
+
+            // 如果 Scoop 目录存在，尝试从 scoop.ps1 文件读取版本
+            if scoop_apps_dir.exists() {
+                let scoop_ps1 = scoop_apps_dir.join("bin").join("scoop.ps1");
+                if scoop_ps1.exists() {
+                    if let Ok(content) = std::fs::read_to_string(&scoop_ps1) {
+                        // 查找版本信息
+                        for line in content.lines() {
+                            if line.contains("$version") || line.contains("version") {
+                                // 提取版本号
+                                if let Some(pos) = line.find('=') {
+                                    let version_part = &line[pos + 1..].trim();
+                                    // 去除引号
+                                    let version =
+                                        version_part.trim_matches(|c| c == '\'' || c == '"');
+                                    if !version.is_empty()
+                                        && version
+                                            .chars()
+                                            .next()
+                                            .map(|c| c.is_ascii_digit())
+                                            .unwrap_or(false)
+                                    {
+                                        return Some(version.to_string());
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-                // Fallback to docker-compose v1
-                std::process::Command::new("docker-compose")
-                    .arg("--version")
-                    .output()
-                    .ok()
-                    .and_then(|out| {
-                        let stdout = String::from_utf8_lossy(&out.stdout);
-                        stdout.split_whitespace().nth(2).map(|s| s.to_string())
-                    })
-            })
+            }
+        }
+
+        // 尝试使用 scoop --version 命令
+        if let Ok(output) = std::process::Command::new("scoop")
+            .arg("--version")
+            .output()
+        {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                // Scoop 输出格式:
+                // Current Scoop version:
+                // b588a06e chore(release): Bump to version 0.5.3 (resync) (#6436)
+                //
+                // 我们需要提取 "0.5.3" 这样的版本号
+                for line in stdout.lines() {
+                    if line.contains("version") && !line.starts_with("Current") {
+                        // 查找 "version X.X.X" 格式
+                        if let Some(pos) = line.find("version ") {
+                            let after_version = &line[pos + 8..];
+                            // 跳过前导空格
+                            let after_version = after_version.trim_start();
+                            // 提取版本号（直到遇到空格或括号）
+                            let version: String = after_version
+                                .chars()
+                                .take_while(|c| c.is_ascii_digit() || *c == '.')
+                                .collect();
+                            if !version.is_empty() {
+                                return Some(version);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 尝试从 scoop 配置文件读取版本
+        if let Some(home) = dirs::home_dir() {
+            let config_path = home.join(".config").join("scoop").join("config.json");
+            if config_path.exists() {
+                if let Ok(content) = std::fs::read_to_string(&config_path) {
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                        if let Some(version) = json.get("last_update") {
+                            return version.as_str().map(|s| s.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    fn detect_sudo_version(&self) -> Option<String> {
+        // Windows 上通过 PowerShell 执行，以支持 gsudo.cmd 等批处理文件
+        // 添加 CREATE_NO_WINDOW 标志防止控制台弹窗
+        let output = if cfg!(target_os = "windows") {
+            let flags: u32 = 0x08000000; // CREATE_NO_WINDOW
+            let creation_flags = flags;
+
+            std::process::Command::new("powershell.exe")
+                .args(["-Command", "& { gsudo --version }"])
+                .creation_flags(creation_flags)
+                .output()
+                .ok()
+        } else {
+            std::process::Command::new("sudo")
+                .arg("--version")
+                .output()
+                .ok()
+        };
+
+        output.and_then(|output| {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            // gsudo 输出格式: "gsudo version: 2.6.1"
+            for line in stdout.lines() {
+                if line.contains("version") || line.contains("Version") {
+                    if let Some(pos) = line.find(':') {
+                        let version = line[pos + 1..].trim();
+                        if !version.is_empty() {
+                            return Some(version.to_string());
+                        }
+                    }
+                    // 尝试提取数字版本号
+                    let version: String = line
+                        .chars()
+                        .skip_while(|c| !c.is_ascii_digit())
+                        .take_while(|c| c.is_ascii_digit() || *c == '.')
+                        .collect();
+                    if !version.is_empty() {
+                        return Some(version);
+                    }
+                }
+            }
+            None
+        })
+    }
+
+    fn detect_git_version(&self) -> Option<String> {
+        // Windows 上通过 PowerShell 执行
+        // 添加 CREATE_NO_WINDOW 标志防止控制台弹窗
+        let output = if cfg!(target_os = "windows") {
+            let flags: u32 = 0x08000000; // CREATE_NO_WINDOW
+            let creation_flags = flags;
+
+            std::process::Command::new("powershell.exe")
+                .args(["-Command", "& { git --version }"])
+                .creation_flags(creation_flags)
+                .output()
+                .ok()
+        } else {
+            std::process::Command::new("git")
+                .arg("--version")
+                .output()
+                .ok()
+        };
+
+        output.and_then(|output| {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            // git 输出格式: "git version 2.54.0.windows.1"
+            stdout
+                .split_whitespace()
+                .nth(2)
+                .map(|s| s.to_string())
+        })
+    }
+
+    fn detect_7zip_version(&self) -> Option<String> {
+        // Windows 上通过 PowerShell 执行
+        // 添加 CREATE_NO_WINDOW 标志防止控制台弹窗
+        let output = if cfg!(target_os = "windows") {
+            let flags: u32 = 0x08000000; // CREATE_NO_WINDOW
+            let creation_flags = flags;
+
+            std::process::Command::new("powershell.exe")
+                .args(["-Command", "& { 7z i }"])
+                .creation_flags(creation_flags)
+                .output()
+                .ok()
+        } else {
+            std::process::Command::new("7z")
+                .arg("i")
+                .output()
+                .ok()
+        };
+
+        output.and_then(|output| {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            // 7-Zip 输出格式: "7-Zip 26.01 (x64) : ..."
+            for line in stdout.lines() {
+                if line.starts_with("7-Zip") {
+                    let version: String = line
+                        .chars()
+                        .skip(6) // Skip "7-Zip "
+                        .take_while(|c| c.is_ascii_digit() || *c == '.')
+                        .collect();
+                    if !version.is_empty() {
+                        return Some(version);
+                    }
+                }
+            }
+            None
+        })
+    }
+
+    fn detect_switchhosts_version(&self) -> Option<String> {
+        // SwitchHosts 通过 scoop 安装，从 manifest.json 读取版本
+        if let Some(home) = dirs::home_dir() {
+            let manifest_path = home.join("scoop").join("apps").join("switchhosts").join("current").join("manifest.json");
+            if manifest_path.exists() {
+                if let Ok(content) = std::fs::read_to_string(&manifest_path) {
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                        if let Some(version) = json.get("version") {
+                            return version.as_str().map(|s| s.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    fn detect_colortool_version(&self) -> Option<String> {
+        // Windows 上通过 PowerShell 执行
+        // 添加 CREATE_NO_WINDOW 标志防止控制台弹窗
+        let output = if cfg!(target_os = "windows") {
+            let flags: u32 = 0x08000000; // CREATE_NO_WINDOW
+            let creation_flags = flags;
+
+            std::process::Command::new("powershell.exe")
+                .args(["-Command", "& { colortool --version }"])
+                .creation_flags(creation_flags)
+                .output()
+                .ok()
+        } else {
+            std::process::Command::new("colortool")
+                .arg("--version")
+                .output()
+                .ok()
+        };
+
+        output.and_then(|output| {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let version = stdout.trim().to_string();
+            if !version.is_empty() && version.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                Some(version)
+            } else {
+                None
+            }
+        })
     }
 
     fn detect_ffmpeg_version(&self) -> Option<String> {
@@ -847,24 +1198,12 @@ impl SoftwareScanner {
             .ok()
             .and_then(|output| {
                 let stdout = String::from_utf8_lossy(&output.stdout);
-                stdout.lines().next()
+                stdout
+                    .lines()
+                    .next()
                     .and_then(|line| line.split_whitespace().nth(3))
                     .map(|s| s.to_string())
             })
-    }
-
-    fn detect_apifox_version(&self, config_path: &PathBuf) -> Option<String> {
-        let settings = config_path.join("settings.json");
-        if settings.exists() {
-            if let Ok(content) = std::fs::read_to_string(&settings) {
-                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-                    if let Some(version) = json.get("appVersion") {
-                        return version.as_str().map(|s| s.to_string());
-                    }
-                }
-            }
-        }
-        None
     }
 
     fn detect_postman_version(&self, config_path: &PathBuf) -> Option<String> {
@@ -890,7 +1229,9 @@ impl SoftwareScanner {
                         for val in vals {
                             if let Some(id) = val.get("id").and_then(|i| i.as_str()) {
                                 if id.starts_with("obsidian-") {
-                                    return Some(id.strip_prefix("obsidian-").unwrap_or(id).to_string());
+                                    return Some(
+                                        id.strip_prefix("obsidian-").unwrap_or(id).to_string(),
+                                    );
                                 }
                             }
                         }
@@ -930,8 +1271,14 @@ impl SoftwareScanner {
                     .and_then(|output| {
                         let stdout = String::from_utf8_lossy(&output.stdout);
                         let stderr = String::from_utf8_lossy(&output.stderr);
-                        let combined = if stdout.is_empty() { stderr.as_ref() } else { stdout.as_ref() };
-                        combined.lines().next()
+                        let combined = if stdout.is_empty() {
+                            stderr.as_ref()
+                        } else {
+                            stdout.as_ref()
+                        };
+                        combined
+                            .lines()
+                            .next()
                             .map(|s| s.trim().to_string())
                             .filter(|s| !s.is_empty() && s.len() < 50)
                     })
@@ -1082,7 +1429,10 @@ fn chrono_lite_now() -> String {
 
     let day = days + 1;
 
-    format!("{:04}-{:02}-{:02}T{:02}:{:02}:00Z", year, month, day, hours, minutes)
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:00Z",
+        year, month, day, hours, minutes
+    )
 }
 
 fn is_leap_year(year: u64) -> bool {
@@ -1097,22 +1447,24 @@ const MONTH_DAYS: [u64; 12] = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 /// will not show an install path, not that detection failed.
 fn fallback_install_path(key: &str) -> Option<String> {
     let p = match key {
-        "docker" => "/usr/local/bin/docker",
-        "docker-compose" => "/usr/local/bin/docker-compose",
         "ffmpeg" => "/usr/local/bin/ffmpeg",
         "vscode" | "code" => "/usr/local/bin/code",
         "homebrew" | "brew" => "/opt/homebrew/bin/brew",
-        "nvm" => return dirs::home_dir().map(|h| h.join(".nvm").join("nvm.sh").display().to_string()),
+        "nvm" => {
+            return dirs::home_dir().map(|h| h.join(".nvm").join("nvm.sh").display().to_string())
+        }
         "pyenv" => return dirs::home_dir().map(|h| h.join(".pyenv").display().to_string()),
-        "goenv" => return dirs::home_dir().map(|h| h.join(".goenv").display().to_string()),
         "jenv" => return dirs::home_dir().map(|h| h.join(".jenv").display().to_string()),
-        "asdf" => return dirs::home_dir().map(|h| h.join(".asdf").display().to_string()),
-        "oh-my-posh" => return dirs::home_dir().map(|h| h.join(".oh-my-posh.omp.json").display().to_string()),
+        "oh-my-posh" => {
+            return dirs::home_dir().map(|h| h.join(".oh-my-posh.omp.json").display().to_string())
+        }
         "node" => "/usr/local/bin/node",
         "python" | "python3" => "/usr/local/bin/python3",
         "go" => "/usr/local/go/bin/go",
         "java" => "/usr/bin/java",
-        "rustc" | "cargo" => return dirs::home_dir().map(|h| h.join(".cargo").join("bin").display().to_string()),
+        "rustc" | "cargo" => {
+            return dirs::home_dir().map(|h| h.join(".cargo").join("bin").display().to_string())
+        }
         _ => return None,
     };
     Some(p.to_string())
@@ -1162,28 +1514,47 @@ mod tests {
         // without coupling to a hard-coded total.
         assert!(!configs.is_empty());
         let tiers: std::collections::HashSet<u8> = configs.iter().map(|c| c.tier).collect();
-        assert!(tiers.len() >= 5, "expected entries across all 5 tiers, got {:?}", tiers);
+        assert!(
+            tiers.len() >= 5,
+            "expected entries across all 5 tiers, got {:?}",
+            tiers
+        );
     }
 
     #[test]
     fn test_compute_status_not_installed() {
         let scanner = SoftwareScanner::new();
-        assert_eq!(scanner.compute_status(false, None, None), SoftwareStatus::NotInstalled);
-        assert_eq!(scanner.compute_status(false, Some("1.0"), None), SoftwareStatus::NotInstalled);
+        assert_eq!(
+            scanner.compute_status(false, None, None),
+            SoftwareStatus::NotInstalled
+        );
+        assert_eq!(
+            scanner.compute_status(false, Some("1.0"), None),
+            SoftwareStatus::NotInstalled
+        );
     }
 
     #[test]
     fn test_compute_status_installed() {
         let scanner = SoftwareScanner::new();
-        assert_eq!(scanner.compute_status(true, Some("4.3.0"), None), SoftwareStatus::Installed);
+        assert_eq!(
+            scanner.compute_status(true, Some("4.3.0"), None),
+            SoftwareStatus::Installed
+        );
     }
 
     #[test]
     fn test_compute_status_unknown_degrades_safely() {
         let scanner = SoftwareScanner::new();
         // Installed but no version command output -> Unknown, not panic.
-        assert_eq!(scanner.compute_status(true, None, None), SoftwareStatus::Unknown);
-        assert_eq!(scanner.compute_status(true, Some(""), None), SoftwareStatus::Unknown);
+        assert_eq!(
+            scanner.compute_status(true, None, None),
+            SoftwareStatus::Unknown
+        );
+        assert_eq!(
+            scanner.compute_status(true, Some(""), None),
+            SoftwareStatus::Unknown
+        );
     }
 
     #[test]

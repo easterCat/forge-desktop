@@ -20,11 +20,16 @@ pub fn get_software_list(state: State<AppState>) -> Result<Vec<Software>, String
 }
 
 #[tauri::command]
-pub fn detect_software() -> Vec<Software> {
+pub fn detect_software(installed_versions: Option<std::collections::HashMap<String, String>>) -> Vec<Software> {
     log::info!("Detecting installed software (parallel mode)");
     let scanner = SoftwareScanner::new();
     // Use parallel detection for faster startup
-    scanner.detect_software_parallel()
+    if installed_versions.is_some() {
+        // If we have pre-installed versions, use the enhanced detection
+        scanner.detect_software_parallel_with_versions(installed_versions)
+    } else {
+        scanner.detect_software_parallel()
+    }
 }
 
 #[tauri::command]

@@ -3,6 +3,9 @@ use std::process::Command;
 use thiserror::Error;
 use regex::Regex;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 #[derive(Error, Debug)]
 pub enum VersionManagerError {
     #[error("Command execution failed: {0}")]
@@ -69,6 +72,7 @@ impl VersionManager {
         match software_key {
             "nvm" => self.get_nvm_versions(),
             "pyenv" => self.get_pyenv_versions(),
+            "jenv" => self.get_jenv_versions(),
             "homebrew" => self.get_homebrew_info(),
             _ => Err(VersionManagerError::NotSupported(software_key.to_string())),
         }
@@ -85,6 +89,9 @@ impl VersionManager {
         match software_key {
             "nvm" => self.install_nvm_version(version),
             "pyenv" => self.install_pyenv_version(version),
+            "jenv" => Err(VersionManagerError::NotSupported(
+                "jenv does not install Java versions, use jenv add instead".to_string(),
+            )),
             "homebrew" => Err(VersionManagerError::NotSupported(
                 "Homebrew cannot install multiple versions".to_string(),
             )),
@@ -103,6 +110,7 @@ impl VersionManager {
         match software_key {
             "nvm" => self.switch_nvm_version(version),
             "pyenv" => self.switch_pyenv_version(version),
+            "jenv" => self.switch_jenv_version(version),
             "homebrew" => Err(VersionManagerError::NotSupported(
                 "Homebrew does not support version switching".to_string(),
             )),
@@ -121,6 +129,7 @@ impl VersionManager {
         match software_key {
             "nvm" => self.set_nvm_global_version(version),
             "pyenv" => self.set_pyenv_global_version(version),
+            "jenv" => self.set_jenv_global_version(version),
             "homebrew" => Err(VersionManagerError::NotSupported(
                 "Homebrew does not support global version".to_string(),
             )),
@@ -139,6 +148,7 @@ impl VersionManager {
         match software_key {
             "nvm" => self.remove_nvm_version(version),
             "pyenv" => self.remove_pyenv_version(version),
+            "jenv" => self.remove_jenv_version(version),
             "homebrew" => Err(VersionManagerError::NotSupported(
                 "Homebrew cannot remove versions".to_string(),
             )),
@@ -148,85 +158,166 @@ impl VersionManager {
 
     // ============ NVM Methods ============
 
+    /// Run an nvm command, using nvm.exe directly on Windows and bash on Unix
+    fn run_nvm_command(&self, nvm_args: &str) -> VersionManagerResult<String> {
+        #[cfg(target_os = "windows")]
+        {
+            // On Windows, nvm-windows uses nvm.exe directly
+            let output = Command::new("nvm")
+                .args(nvm_args.split_whitespace().collect::<Vec<_>>().as_slice())
+                .output()
+                .map_err(|e| VersionManagerError::CommandFailed(format!("Failed to run nvm: {}", e)))?;
+
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                Ok(stdout.to_string())
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                Err(VersionManagerError::CommandFailed(stderr.to_string()))
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            // On Unix/macOS, use bash with nvm.sh
+            let output = Command::new("bash")
+                .args(["-c", &format!("source ~/.nvm/nvm.sh && nvm {}", nvm_args)])
+                .output()
+                .map_err(|e| VersionManagerError::CommandFailed(format!("Failed to run nvm: {}", e)))?;
+
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                Ok(stdout.to_string())
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                Err(VersionManagerError::CommandFailed(stderr.to_string()))
+            }
+        }
+    }
+
     fn get_nvm_versions(&self) -> VersionManagerResult<VersionListResult> {
-        // Get installed versions
-        let installed_output = Command::new("bash")
-            .args(["-c", "source ~/.nvm/nvm.sh && nvm ls"])
-            .output()
-            .map_err(|e| VersionManagerError::CommandFailed(e.to_string()))?;
+        // Get installed versions using platform-appropriate command
+        let installed_output = self.run_nvm_command("list")?;
 
         let mut installed_versions = Vec::new();
-        if installed_output.status.success() {
-            let stdout = String::from_utf8_lossy(&installed_output.stdout);
-            for line in stdout.lines() {
-                let line = strip_ansi_codes(line);
-                let trimmed = line.trim();
+        let mut detected_current_from_list: Option<String> = None;
 
-                // Skip empty lines
-                if trimmed.is_empty() {
-                    continue;
-                }
+        for line in installed_output.lines() {
+            let line = strip_ansi_codes(line);
+            let trimmed = line.trim();
 
-                // Skip alias lines (like "default ->", "iojs ->", "node ->", "lts/* ->", etc.)
-                // These lines contain " -> " followed by a non-version value
-                if trimmed.contains(" -> ") {
-                    continue;
-                }
+            // Skip empty lines
+            if trimmed.is_empty() {
+                continue;
+            }
 
-                // Extract version number from lines like "-> v24.16.0 *" or "  v24.16.0 *"
-                // These are the actual installed versions
-                let version = trimmed
-                    .trim_start_matches("-> ")
-                    .trim_end_matches(" *")  // Remove trailing " *"
+            // Skip alias lines (like "default ->", "iojs ->", "node ->", "lts/* ->", etc.)
+            if trimmed.contains(" -> ") {
+                continue;
+            }
+
+            // Windows nvm-windows format: "  * 20.19.0    (Currently using 64-bit executable)"
+            // Unix nvm-sh format: "-> v24.16.0 *" or "  v24.16.0 *"
+            let is_current = trimmed.starts_with('*')
+                || trimmed.starts_with("->")
+                || trimmed.contains("Currently using");
+
+            // Extract version number
+            let version = if cfg!(target_os = "windows") {
+                // nvm-windows: version may have "v" prefix or not
+                // "  * 20.19.0    (Currently using 64-bit executable)"
+                let cleaned = trimmed
+                    .trim_start_matches('*')
+                    .trim_start_matches("->")
                     .trim();
 
-                // Only include versions that start with "v" followed by numbers
-                if version.starts_with('v') && version.len() > 1 && version[1..].chars().next().map_or(false, |c| c.is_ascii_digit()) {
-                    installed_versions.push(version.to_string());
+                // Take only the version part (before any whitespace or parentheses)
+                let version: String = cleaned
+                    .chars()
+                    .take_while(|c| c.is_ascii_digit() || *c == '.' || *c == 'v' || *c == 'V')
+                    .collect();
+                version.trim().to_string()
+            } else {
+                // nvm-sh: "-> v24.16.0 *" or "  v24.16.0 *"
+                trimmed
+                    .trim_start_matches("->")
+                    .trim_end_matches('*')
+                    .trim()
+                    .to_string()
+            };
+
+            if version.is_empty() {
+                continue;
+            }
+
+            // Validate version looks like a version number
+            let version_clean = version.trim_start_matches('v').trim_start_matches('V');
+            if !version_clean.is_empty()
+                && version_clean
+                    .chars()
+                    .next()
+                    .map_or(false, |c| c.is_ascii_digit())
+            {
+                // Normalize to always include "v" prefix for consistency
+                let normalized = if version.starts_with('v') || version.starts_with('V') {
+                    format!("v{}", &version[1..])
+                } else if version_clean.chars().next().map_or(false, |c| c.is_ascii_digit()) {
+                    format!("v{}", version)
+                } else {
+                    version
+                };
+
+                if is_current {
+                    detected_current_from_list = Some(normalized.clone());
                 }
+                installed_versions.push(normalized);
             }
         }
 
         // Get current version
-        let current_output = Command::new("bash")
-            .args(["-c", "source ~/.nvm/nvm.sh && nvm current"])
-            .output()
-            .map_err(|e| VersionManagerError::CommandFailed(e.to_string()))?;
-
-        let current_version = if current_output.status.success() {
-            let stdout = String::from_utf8_lossy(&current_output.stdout);
-            let version = strip_ansi_codes(stdout.trim());
-            if version.is_empty() || version == "N/A" {
-                None
+        let current_version = self.run_nvm_command("current").ok().and_then(|output| {
+            let version = strip_ansi_codes(output.trim());
+            if version.is_empty() || version == "N/A" || version.contains("error") {
+                detected_current_from_list.clone()
             } else {
-                Some(version)
+                // Normalize version
+                let v = version.trim();
+                let normalized = if v.starts_with('v') || v.starts_with('V') {
+                    format!("v{}", &v[1..])
+                } else {
+                    format!("v{}", v)
+                };
+                Some(normalized)
             }
-        } else {
-            None
-        };
+        }).or(detected_current_from_list);
 
         // Get default (global) version
-        let default_output = Command::new("bash")
-            .args(["-c", "source ~/.nvm/nvm.sh && nvm alias default"])
-            .output()
-            .map_err(|e| VersionManagerError::CommandFailed(e.to_string()))?;
-
-        let global_version = if default_output.status.success() {
-            let stdout = String::from_utf8_lossy(&default_output.stdout);
-            let version = strip_ansi_codes(stdout.trim());
-            if version.is_empty() || version == "N/A" {
-                None
-            } else {
-                // Extract just the version number from "default -> 24.16.0 (-> v24.16.0)" format
-                let version = version
-                    .split("->")
-                    .nth(1)
-                    .map(|s| s.trim().split_whitespace().next().unwrap_or("").to_string())
-                    .unwrap_or(version);
-                Some(version)
-            }
+        // nvm-sh uses "nvm alias default", nvm-windows doesn't have this
+        let global_version = if cfg!(target_os = "windows") {
+            // On Windows, the "current" version IS the global default (persists across sessions)
+            current_version.clone()
         } else {
-            None
+            self.run_nvm_command("alias default").ok().and_then(|output| {
+                let version = strip_ansi_codes(output.trim());
+                if version.is_empty() || version == "N/A" {
+                    None
+                } else {
+                    let version = version
+                        .split("->")
+                        .nth(1)
+                        .map(|s| s.trim().split_whitespace().next().unwrap_or("").to_string())
+                        .unwrap_or(version);
+                    // Normalize
+                    let v = version.trim();
+                    let normalized = if v.starts_with('v') || v.starts_with('V') {
+                        format!("v{}", &v[1..])
+                    } else if v.chars().next().map_or(false, |c| c.is_ascii_digit()) {
+                        format!("v{}", v)
+                    } else {
+                        v.to_string()
+                    };
+                    Some(normalized)
+                }
+            })
         };
 
         // Build version list
@@ -251,44 +342,53 @@ impl VersionManager {
     }
 
     fn install_nvm_version(&self, version: &str) -> VersionManagerResult<VersionOperationResult> {
-        let version = if version.starts_with('v') {
-            version.to_string()
+        // nvm-windows uses versions without "v" prefix, nvm-sh uses "v" prefix
+        let install_version = if cfg!(target_os = "windows") {
+            version.trim_start_matches('v').trim_start_matches('V').to_string()
         } else {
-            format!("v{}", version)
+            if version.starts_with('v') {
+                version.to_string()
+            } else {
+                format!("v{}", version)
+            }
         };
 
-        let output = Command::new("bash")
-            .args(["-c", &format!("source ~/.nvm/nvm.sh && nvm install {}", version)])
-            .output()
-            .map_err(|e| VersionManagerError::CommandFailed(e.to_string()))?;
+        let output_str = self.run_nvm_command(&format!("install {}", install_version))?;
 
-        if output.status.success() {
+        if output_str.to_lowercase().contains("error") || output_str.to_lowercase().contains("not found") {
+            Err(VersionManagerError::CommandFailed(output_str))
+        } else {
             Ok(VersionOperationResult {
                 success: true,
-                message: format!("{} installed successfully", version),
-                new_version: Some(version),
+                message: format!("{} installed successfully", install_version),
+                new_version: Some(format!("v{}", install_version)),
             })
-        } else {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(VersionManagerError::CommandFailed(stderr.to_string()))
         }
     }
 
     fn switch_nvm_version(&self, version: &str) -> VersionManagerResult<VersionOperationResult> {
-        let output = Command::new("bash")
-            .args(["-c", &format!("source ~/.nvm/nvm.sh && nvm use {}", version)])
-            .output()
-            .map_err(|e| VersionManagerError::CommandFailed(e.to_string()))?;
+        // nvm-windows uses versions without "v" prefix
+        let use_version = if cfg!(target_os = "windows") {
+            version.trim_start_matches('v').trim_start_matches('V').to_string()
+        } else {
+            version.to_string()
+        };
 
-        if output.status.success() {
+        let output_str = self.run_nvm_command(&format!("use {}", use_version))?;
+
+        if output_str.to_lowercase().contains("error") {
+            Err(VersionManagerError::CommandFailed(output_str))
+        } else {
+            let normalized = if use_version.starts_with('v') || use_version.starts_with('V') {
+                use_version
+            } else {
+                format!("v{}", use_version)
+            };
             Ok(VersionOperationResult {
                 success: true,
-                message: format!("Switched to {}", version),
-                new_version: Some(version.to_string()),
+                message: format!("Switched to {}", normalized),
+                new_version: Some(normalized),
             })
-        } else {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(VersionManagerError::CommandFailed(stderr.to_string()))
         }
     }
 
@@ -296,86 +396,127 @@ impl VersionManager {
         &self,
         version: &str,
     ) -> VersionManagerResult<VersionOperationResult> {
-        let output = Command::new("bash")
-            .args(["-c", &format!("source ~/.nvm/nvm.sh && nvm alias default {}", version)])
-            .output()
-            .map_err(|e| VersionManagerError::CommandFailed(e.to_string()))?;
-
-        if output.status.success() {
-            Ok(VersionOperationResult {
-                success: true,
-                message: format!("Global version set to {}", version),
-                new_version: Some(version.to_string()),
-            })
-        } else {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(VersionManagerError::CommandFailed(stderr.to_string()))
+        #[cfg(target_os = "windows")]
+        {
+            // nvm-windows: "nvm use <version>" sets the persistent default
+            self.switch_nvm_version(version)
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let output_str = self.run_nvm_command(&format!("alias default {}", version))?;
+            if output_str.to_lowercase().contains("error") {
+                Err(VersionManagerError::CommandFailed(output_str))
+            } else {
+                Ok(VersionOperationResult {
+                    success: true,
+                    message: format!("Global version set to {}", version),
+                    new_version: Some(version.to_string()),
+                })
+            }
         }
     }
 
     fn remove_nvm_version(&self, version: &str) -> VersionManagerResult<VersionOperationResult> {
-        let output = Command::new("bash")
-            .args(["-c", &format!("source ~/.nvm/nvm.sh && nvm uninstall {}", version)])
-            .output()
-            .map_err(|e| VersionManagerError::CommandFailed(e.to_string()))?;
+        // nvm-windows uses versions without "v" prefix
+        let uninstall_version = if cfg!(target_os = "windows") {
+            version.trim_start_matches('v').trim_start_matches('V').to_string()
+        } else {
+            version.to_string()
+        };
 
-        if output.status.success() {
+        let output_str = self.run_nvm_command(&format!("uninstall {}", uninstall_version))?;
+
+        if output_str.to_lowercase().contains("error") {
+            Err(VersionManagerError::CommandFailed(output_str))
+        } else {
             Ok(VersionOperationResult {
                 success: true,
-                message: format!("{} removed successfully", version),
+                message: format!("{} removed successfully", uninstall_version),
                 new_version: None,
             })
-        } else {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(VersionManagerError::CommandFailed(stderr.to_string()))
         }
     }
 
     // ============ Pyenv Methods ============
 
+    /// Run a pyenv command, using PowerShell on Windows for .cmd/.ps1 file support
+    /// 添加 CREATE_NO_WINDOW 标志防止控制台弹窗
+    fn run_pyenv_command(&self, pyenv_args: &str) -> VersionManagerResult<String> {
+        let output = if cfg!(target_os = "windows") {
+            // On Windows, use PowerShell to support pyenv.cmd and pyenv.ps1 files
+            // 添加 CREATE_NO_WINDOW 标志防止控制台弹窗
+            let flags: u32 = 0x08000000; // CREATE_NO_WINDOW
+            let creation_flags = flags;
+
+            Command::new("powershell.exe")
+                .args(["-NoProfile", "-Command", &format!("& pyenv {}", pyenv_args)])
+                .creation_flags(creation_flags)
+                .output()
+                .map_err(|e| VersionManagerError::CommandFailed(format!("Failed to run pyenv via PowerShell: {}", e)))?
+        } else {
+            Command::new("pyenv")
+                .args(pyenv_args.split_whitespace().collect::<Vec<_>>().as_slice())
+                .output()
+                .map_err(|e| VersionManagerError::CommandFailed(format!("Failed to run pyenv: {}", e)))?
+        };
+
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            Ok(stdout.to_string())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let msg = if stderr.is_empty() { stdout.to_string() } else { stderr.to_string() };
+            Err(VersionManagerError::CommandFailed(msg))
+        }
+    }
+
     fn get_pyenv_versions(&self) -> VersionManagerResult<VersionListResult> {
         // Get installed versions
-        let installed_output = Command::new("pyenv")
-            .arg("versions")
-            .output()
-            .map_err(|e| VersionManagerError::CommandFailed(e.to_string()))?;
+        let installed_output = self.run_pyenv_command("versions")?;
 
         let mut installed_versions = Vec::new();
         let mut current_version = None;
 
-        if installed_output.status.success() {
-            let stdout = String::from_utf8_lossy(&installed_output.stdout);
-            for line in stdout.lines() {
-                let line = line.trim();
-                if line.starts_with('*') {
-                    // Current version
-                    let version = line.trim_start_matches("* ").trim();
-                    if !version.is_empty() {
-                        current_version = Some(version.to_string());
-                        installed_versions.push(version.to_string());
-                    }
-                } else if !line.is_empty() {
-                    installed_versions.push(line.to_string());
+        for line in installed_output.lines() {
+            let line = line.trim();
+            if line.starts_with('*') {
+                // Current version: "* 3.12.0 (set by ...)"
+                let version = line
+                    .trim_start_matches("* ")
+                    .trim()
+                    // Remove "(set by ...)" suffix
+                    .split('(')
+                    .next()
+                    .unwrap_or("")
+                    .trim();
+                if !version.is_empty() && version != "system" {
+                    current_version = Some(version.to_string());
+                    installed_versions.push(version.to_string());
+                }
+            } else if !line.is_empty() && line != "system" {
+                // Remove "(set by ...)" suffix if present
+                let version = line
+                    .split('(')
+                    .next()
+                    .unwrap_or("")
+                    .trim();
+                if !version.is_empty() {
+                    installed_versions.push(version.to_string());
                 }
             }
         }
 
         // Get global version
-        let global_output = Command::new("pyenv")
-            .args(["global"])
-            .output()
-            .map_err(|e| VersionManagerError::CommandFailed(e.to_string()))?;
+        let global_output = self.run_pyenv_command("global")?;
 
-        let global_version = if global_output.status.success() {
-            let stdout = String::from_utf8_lossy(&global_output.stdout);
-            let version = stdout.trim().to_string();
+        let global_version = {
+            let version = global_output.trim().to_string();
             if version.is_empty() || version == "system" {
                 None
             } else {
                 Some(version)
             }
-        } else {
-            None
         };
 
         // Build version list
@@ -403,84 +544,189 @@ impl VersionManager {
         &self,
         version: &str,
     ) -> VersionManagerResult<VersionOperationResult> {
-        let output = Command::new("pyenv")
-            .args(["install", version])
-            .output()
-            .map_err(|e| VersionManagerError::CommandFailed(e.to_string()))?;
+        let output_str = self.run_pyenv_command(&format!("install {}", version))?;
 
-        if output.status.success() {
-            Ok(VersionOperationResult {
-                success: true,
-                message: format!("{} installed successfully", version),
-                new_version: Some(version.to_string()),
-            })
-        } else {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(VersionManagerError::CommandFailed(stderr.to_string()))
-        }
+        // pyenv install success output usually just says "Installing Python-..."
+        // Error output would contain "ERROR" or the command would have non-zero exit
+        Ok(VersionOperationResult {
+            success: true,
+            message: format!("{} installed successfully", version),
+            new_version: Some(version.to_string()),
+        })
     }
 
     fn switch_pyenv_version(
         &self,
         version: &str,
     ) -> VersionManagerResult<VersionOperationResult> {
-        let output = Command::new("pyenv")
-            .args(["local", version])
-            .output()
-            .map_err(|e| VersionManagerError::CommandFailed(e.to_string()))?;
+        let output_str = self.run_pyenv_command(&format!("local {}", version))?;
 
-        if output.status.success() {
-            Ok(VersionOperationResult {
-                success: true,
-                message: format!("Switched to {} locally", version),
-                new_version: Some(version.to_string()),
-            })
-        } else {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(VersionManagerError::CommandFailed(stderr.to_string()))
-        }
+        Ok(VersionOperationResult {
+            success: true,
+            message: format!("Switched to {} locally", version),
+            new_version: Some(version.to_string()),
+        })
     }
 
     fn set_pyenv_global_version(
         &self,
         version: &str,
     ) -> VersionManagerResult<VersionOperationResult> {
-        let output = Command::new("pyenv")
-            .args(["global", version])
-            .output()
-            .map_err(|e| VersionManagerError::CommandFailed(e.to_string()))?;
+        let output_str = self.run_pyenv_command(&format!("global {}", version))?;
 
-        if output.status.success() {
-            Ok(VersionOperationResult {
-                success: true,
-                message: format!("Global version set to {}", version),
-                new_version: Some(version.to_string()),
-            })
-        } else {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(VersionManagerError::CommandFailed(stderr.to_string()))
-        }
+        Ok(VersionOperationResult {
+            success: true,
+            message: format!("Global version set to {}", version),
+            new_version: Some(version.to_string()),
+        })
     }
 
     fn remove_pyenv_version(
         &self,
         version: &str,
     ) -> VersionManagerResult<VersionOperationResult> {
-        let output = Command::new("pyenv")
-            .args(["uninstall", "-f", version])
-            .output()
-            .map_err(|e| VersionManagerError::CommandFailed(e.to_string()))?;
+        let output_str = self.run_pyenv_command(&format!("uninstall -f {}", version))?;
+
+        Ok(VersionOperationResult {
+            success: true,
+            message: format!("{} removed successfully", version),
+            new_version: None,
+        })
+    }
+
+    // ============ Jenv Methods ============
+
+    /// Run a jenv command, using PowerShell on Windows
+    /// 添加 CREATE_NO_WINDOW 标志防止控制台弹窗
+    fn run_jenv_command(&self, jenv_args: &str) -> VersionManagerResult<String> {
+        let output = if cfg!(target_os = "windows") {
+            // 添加 CREATE_NO_WINDOW 标志防止控制台弹窗
+            let flags: u32 = 0x08000000; // CREATE_NO_WINDOW
+            let creation_flags = flags;
+
+            Command::new("powershell.exe")
+                .args(["-NoProfile", "-Command", &format!("& jenv {}", jenv_args)])
+                .creation_flags(creation_flags)
+                .output()
+                .map_err(|e| VersionManagerError::CommandFailed(format!("Failed to run jenv: {}", e)))?
+        } else {
+            Command::new("jenv")
+                .args(jenv_args.split_whitespace().collect::<Vec<_>>().as_slice())
+                .output()
+                .map_err(|e| VersionManagerError::CommandFailed(format!("Failed to run jenv: {}", e)))?
+        };
 
         if output.status.success() {
-            Ok(VersionOperationResult {
-                success: true,
-                message: format!("{} removed successfully", version),
-                new_version: None,
-            })
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            Ok(stdout.to_string())
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(VersionManagerError::CommandFailed(stderr.to_string()))
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let msg = if stderr.is_empty() { stdout.to_string() } else { stderr.to_string() };
+            Err(VersionManagerError::CommandFailed(msg))
         }
+    }
+
+    fn get_jenv_versions(&self) -> VersionManagerResult<VersionListResult> {
+        // jenv versions output:
+        //   1.8
+        //   11.0
+        // * 17.0  (set by /path/to/.java-version)
+        let installed_output = self.run_jenv_command("versions")?;
+
+        let mut installed_versions = Vec::new();
+        let mut current_version = None;
+
+        for line in installed_output.lines() {
+            let line = line.trim();
+            if line.starts_with('*') {
+                let version = line
+                    .trim_start_matches("* ")
+                    .trim()
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or("")
+                    .trim();
+                if !version.is_empty() {
+                    current_version = Some(version.to_string());
+                    installed_versions.push(version.to_string());
+                }
+            } else if !line.is_empty() {
+                let version = line.split_whitespace().next().unwrap_or("").trim();
+                if !version.is_empty() {
+                    installed_versions.push(version.to_string());
+                }
+            }
+        }
+
+        // jenv global version
+        let global_output = self.run_jenv_command("global").ok();
+        let global_version = global_output.and_then(|output| {
+            let version = output.trim().to_string();
+            if version.is_empty() || version.contains("not found") {
+                None
+            } else {
+                Some(version)
+            }
+        });
+
+        // Build version list
+        let versions: Vec<VersionInfo> = installed_versions
+            .iter()
+            .map(|v| VersionInfo {
+                version: v.clone(),
+                is_installed: true,
+                is_current: current_version.as_deref() == Some(v.as_str()),
+                is_global: global_version.as_deref() == Some(v.as_str()),
+            })
+            .collect();
+
+        let version_count = versions.len();
+        Ok(VersionListResult {
+            success: true,
+            versions,
+            current_version,
+            global_version,
+            message: format!("Found {} managed Java versions", version_count),
+        })
+    }
+
+    fn switch_jenv_version(
+        &self,
+        version: &str,
+    ) -> VersionManagerResult<VersionOperationResult> {
+        // jenv local sets the version for the current directory
+        let output_str = self.run_jenv_command(&format!("local {}", version))?;
+
+        Ok(VersionOperationResult {
+            success: true,
+            message: format!("Switched to {} locally", version),
+            new_version: Some(version.to_string()),
+        })
+    }
+
+    fn set_jenv_global_version(
+        &self,
+        version: &str,
+    ) -> VersionManagerResult<VersionOperationResult> {
+        let output_str = self.run_jenv_command(&format!("global {}", version))?;
+
+        Ok(VersionOperationResult {
+            success: true,
+            message: format!("Global Java version set to {}", version),
+            new_version: Some(version.to_string()),
+        })
+    }
+
+    fn remove_jenv_version(
+        &self,
+        _version: &str,
+    ) -> VersionManagerResult<VersionOperationResult> {
+        // jenv doesn't "remove" versions - it only manages which existing Java to use.
+        // Users need to uninstall Java themselves.
+        Err(VersionManagerError::NotSupported(
+            "jenv manages existing Java installations. Uninstall Java from your system to remove a version.".to_string(),
+        ))
     }
 
     // ============ Homebrew Methods ============
@@ -534,44 +780,161 @@ impl VersionManager {
         match software_key {
             "nvm" => self.get_nvm_available_versions(),
             "pyenv" => self.get_pyenv_available_versions(),
+            "jenv" => Ok(Vec::new()), // jenv doesn't install Java versions
             _ => Err(VersionManagerError::NotSupported(software_key.to_string())),
         }
     }
 
     /// Get available NVM versions from remote
     fn get_nvm_available_versions(&self) -> VersionManagerResult<Vec<AvailableVersion>> {
-        let output = Command::new("bash")
-            .args(["-c", "source ~/.nvm/nvm.sh && nvm ls-remote --no-colors 2>/dev/null | grep -E 'v[0-9]+\\.[0-9]+\\.[0-9]+' | awk '{print $1}'"])
-            .output()
-            .map_err(|e| VersionManagerError::CommandFailed(e.to_string()))?;
+        #[cfg(target_os = "windows")]
+        {
+            // nvm-windows: "nvm list available" shows a table of available versions
+            // Output format:
+            // |   CURRENT    |     LTS      |  OLD STABLE  | OLD UNSTABLE |
+            // |--------------|--------------|--------------|--------------|
+            // |    26.4.0    |   24.18.0    |   0.12.18    |   0.11.16    |
+            let output = Command::new("nvm")
+                .args(["list", "available"])
+                .output()
+                .map_err(|e| VersionManagerError::CommandFailed(format!("Failed to run nvm: {}", e)))?;
 
-        if output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let versions: Vec<AvailableVersion> = stdout
-                .lines()
-                .filter_map(|line| {
-                    let version = strip_ansi_codes(line).trim().to_string();
-                    if version.is_empty() || !version.starts_with('v') {
-                        return None;
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let mut all_versions: std::collections::HashSet<String> = std::collections::HashSet::new();
+                // Track which versions are LTS (column index 1)
+                let mut lts_versions: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+
+                // Parse header to find LTS column index
+                let mut lts_column_index: Option<usize> = None;
+                let mut columns: Vec<String> = Vec::new();
+
+                for line in stdout.lines() {
+                    let line = strip_ansi_codes(line);
+                    let trimmed = line.trim();
+
+                    // Skip empty lines and separator lines (contain only |, -, and spaces)
+                    if trimmed.is_empty() || trimmed.chars().all(|c| c == '|' || c == '-' || c == ' ') {
+                        continue;
                     }
-                    Some(AvailableVersion {
-                        version,
-                        lts: None,
+
+                    // Parse header line to find column positions
+                    if trimmed.contains("CURRENT") || trimmed.contains("LTS") {
+                        // This is the header line: "|   CURRENT    |     LTS      |  OLD STABLE  | OLD UNSTABLE |"
+                        // Split by | and find which column is LTS
+                        let parts: Vec<&str> = trimmed.split('|').collect();
+                        for (i, part) in parts.iter().enumerate() {
+                            let part_trimmed = part.trim();
+                            if part_trimmed == "LTS" {
+                                lts_column_index = Some(i);
+                            }
+                            if !part_trimmed.is_empty() {
+                                columns.push(part_trimmed.to_string());
+                            }
+                        }
+                        continue;
+                    }
+
+                    // Parse data lines: "|    26.4.0    |   24.18.0    |   0.12.18    |   0.11.16    |"
+                    let parts: Vec<&str> = trimmed.split('|').collect();
+                    for (i, part) in parts.iter().enumerate() {
+                        let version = part.trim().to_string();
+                        // Check if this looks like a version number (digits and dots)
+                        if !version.is_empty()
+                            && version.chars().next().map_or(false, |c| c.is_ascii_digit())
+                            && version.contains('.')
+                        {
+                            // Normalize to v-prefix
+                            let normalized = format!("v{}", version);
+                            all_versions.insert(normalized.clone());
+
+                            // Check if this is the LTS column
+                            if lts_column_index == Some(i) {
+                                lts_versions.insert(normalized, "LTS".to_string());
+                            }
+                        }
+                    }
+                }
+
+                // Convert to Vec<AvailableVersion>
+                let mut versions: Vec<AvailableVersion> = all_versions
+                    .into_iter()
+                    .map(|v| AvailableVersion {
+                        version: v.clone(),
+                        lts: lts_versions.get(&v).cloned(),
                     })
-                })
-                .collect();
-            Ok(versions)
-        } else {
-            Err(VersionManagerError::CommandFailed("Failed to get remote versions".to_string()))
+                    .collect();
+
+                // Sort by version descending
+                versions.sort_by(|a, b| {
+                    let a_parts: Vec<u32> = a.version.trim_start_matches('v')
+                        .split('.').filter_map(|p| p.parse().ok()).collect();
+                    let b_parts: Vec<u32> = b.version.trim_start_matches('v')
+                        .split('.').filter_map(|p| p.parse().ok()).collect();
+                    for i in 0..a_parts.len().max(b_parts.len()) {
+                        let a_val = a_parts.get(i).unwrap_or(&0);
+                        let b_val = b_parts.get(i).unwrap_or(&0);
+                        if a_val != b_val {
+                            return b_val.cmp(a_val);
+                        }
+                    }
+                    std::cmp::Ordering::Equal
+                });
+
+                Ok(versions)
+            } else {
+                Err(VersionManagerError::CommandFailed("Failed to get remote versions".to_string()))
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            // nvm-sh: "nvm ls-remote" shows all remote versions
+            let output = Command::new("bash")
+                .args(["-c", "source ~/.nvm/nvm.sh && nvm ls-remote --no-colors 2>/dev/null | grep -E 'v[0-9]+\\.[0-9]+\\.[0-9]+' | awk '{print $1}'"])
+                .output()
+                .map_err(|e| VersionManagerError::CommandFailed(e.to_string()))?;
+
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let versions: Vec<AvailableVersion> = stdout
+                    .lines()
+                    .filter_map(|line| {
+                        let version = strip_ansi_codes(line).trim().to_string();
+                        if version.is_empty() || !version.starts_with('v') {
+                            return None;
+                        }
+                        Some(AvailableVersion {
+                            version,
+                            lts: None,
+                        })
+                    })
+                    .collect();
+                Ok(versions)
+            } else {
+                Err(VersionManagerError::CommandFailed("Failed to get remote versions".to_string()))
+            }
         }
     }
 
     /// Get available Pyenv versions from remote
+    /// 添加 CREATE_NO_WINDOW 标志防止控制台弹窗
     fn get_pyenv_available_versions(&self) -> VersionManagerResult<Vec<AvailableVersion>> {
-        let output = Command::new("pyenv")
-            .args(["install", "--list"])
-            .output()
-            .map_err(|e| VersionManagerError::CommandFailed(e.to_string()))?;
+        let output = if cfg!(target_os = "windows") {
+            // 添加 CREATE_NO_WINDOW 标志防止控制台弹窗
+            let flags: u32 = 0x08000000; // CREATE_NO_WINDOW
+            let creation_flags = flags;
+
+            Command::new("powershell.exe")
+                .args(["-NoProfile", "-Command", "& pyenv install --list"])
+                .creation_flags(creation_flags)
+                .output()
+                .map_err(|e| VersionManagerError::CommandFailed(format!("Failed to run pyenv: {}", e)))?
+        } else {
+            Command::new("pyenv")
+                .args(["install", "--list"])
+                .output()
+                .map_err(|e| VersionManagerError::CommandFailed(format!("Failed to run pyenv: {}", e)))?
+        };
 
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
@@ -580,7 +943,9 @@ impl VersionManager {
                 .skip(1) // Skip header line
                 .filter_map(|line| {
                     let version = line.trim().to_string();
-                    if version.is_empty() || !version.chars().next().map_or(false, |c| c.is_ascii_digit()) {
+                    if version.is_empty()
+                        || !version.chars().next().map_or(false, |c| c.is_ascii_digit())
+                    {
                         return None;
                     }
                     Some(AvailableVersion {

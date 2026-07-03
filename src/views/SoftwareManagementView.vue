@@ -12,6 +12,7 @@ import { extractError } from '@/utils/error'
 import { useOperationProgress } from '@/composables/useOperationProgress'
 import { confirm } from '@/utils/dialog'
 import { open as openExternal } from '@tauri-apps/plugin-shell'
+import { platform as getPlatform } from '@tauri-apps/plugin-os'
 
 const { startOperation, updateProgress, completeOperation, getOperation } = useOperationProgress()
 
@@ -87,50 +88,60 @@ const softwareStore = useSoftwareStore()
 
 const searchQuery = ref('')
 const selectedTier = ref('environment')  // 默认选中环境分组
-const selectedPlatform = ref('all')
+const selectedPlatform = ref('unknown') // 默认未知，稍后自动检测
 const selectedStatus = ref('all')
 
-// Homebrew installation status
-const isHomebrewInstalled = computed(() => {
-  const homebrew = softwareList.value.find(sw => sw.key === 'homebrew')
-  return homebrew?.installed ?? false
+// 包管理器安装状态检测
+const isPackageManagerInstalled = computed(() => {
+  if (selectedPlatform.value === 'windows') {
+    // Windows: 检测 Scoop
+    const scoop = softwareList.value.find(sw => sw.key === 'scoop')
+    return scoop?.installed ?? false
+  } else {
+    // macOS: 检测 Homebrew
+    const homebrew = softwareList.value.find(sw => sw.key === 'homebrew')
+    return homebrew?.installed ?? false
+  }
 })
 
-// Check if software requires homebrew (nvm, pyenv)
-function requiresHomebrew(key: string): boolean {
-  return ['nvm', 'pyenv'].includes(key)
+// 检查软件是否依赖包管理器（仅 Windows 平台的环境工具需要 Scoop 安装）
+function requiresPackageManager(key: string): boolean {
+  // 仅 Windows 平台需要依赖 Scoop 安装环境工具
+  if (selectedPlatform.value !== 'windows') {
+    return false
+  }
+  return ['nvm', 'pyenv', 'jenv', 'sudo', 'git', '7zip', 'switchhosts', 'colortool'].includes(key)
 }
 
-// Tier options - 不显示全部，只显示相关分组
+// 获取当前平台的包管理器名称
+function getPackageManagerName(): string {
+  return selectedPlatform.value === 'windows' ? 'Scoop' : 'Homebrew'
+}
+
+// Tier options - AI工具、开发工具、效率工具已合并为一个选项
 const tierOptions = [
   { value: 'environment', label: '环境工具' },
-  { value: 'ai-tools', label: 'AI 工具' },
-  { value: 'development', label: '开发工具' },
-  { value: 'runtime', label: '运行时' },
-  { value: 'debug', label: '调试工具' },
-  { value: 'productivity', label: '效率工具' },
+  { value: 'tools', label: '实用工具' },
 ]
 
-// Platform options
+// Platform options - 仅保留明确的三个选项
 const platformOptions = [
-  { value: 'all', label: 'All Platforms' },
-  { value: 'macos', label: 'macOS' },
   { value: 'windows', label: 'Windows' },
-  { value: 'linux', label: 'Linux' },
-  { value: 'cross', label: 'Cross-platform' },
+  { value: 'macos', label: 'macOS' },
+  { value: 'unknown', label: '未知' },
 ]
 
 // Status options
 const statusOptions = [
   { value: 'all', label: 'All Status' },
   { value: 'detected', label: 'Detected' },
-  { value: 'not-found', label: 'Not Found' },
+  { value: 'not-installed', label: 'Not Installed' },
 ]
 
 const tabItems = [
   { id: 'all', label: 'All' },
   { id: 'detected', label: 'Detected' },
-  { id: 'not-found', label: 'Not Found' },
+  { id: 'not-installed', label: 'Not Installed' },
 ]
 
 // Mock data matching prototype (PENDING: use useSoftwareStore().softwareList)
@@ -171,41 +182,63 @@ const softwareList = computed(() => {
   return mockSoftware
 })
 
-// Get tier by software key - 新的分组逻辑
+// Get tier by software key - 简化分组：运行时和调试工具已合并到开发工具
 function getTierByKey(key: string): string {
   const tierMap: Record<string, string> = {
-    // 环境工具
+    // 环境工具（包管理器、版本管理器）
     'homebrew': 'environment', 'nvm': 'environment', 'pyenv': 'environment',
     'node': 'environment', 'python': 'environment',
+    'jenv': 'environment',
+    'scoop': 'environment', 'sudo': 'environment', 'git': 'environment',
+    '7zip': 'environment', 'switchhosts': 'environment', 'colortool': 'environment',
     // AI 工具
     'cursor': 'ai-tools', 'windsurf': 'ai-tools', 'claude-desktop': 'ai-tools',
     'continue': 'ai-tools', 'cody': 'ai-tools', 'copilot': 'ai-tools',
-    // 开发工具
-    'vscode': 'development', 'oh-my-posh': 'development', 'chocolatey': 'development',
-    'scoop': 'development', 'ssh': 'development', 'windows-terminal': 'development',
-    'iterm2': 'development',
-    // 运行时
-    'docker': 'runtime', 'docker-compose': 'runtime', 'ffmpeg': 'runtime',
-    'goenv': 'runtime', 'jenv': 'runtime', 'asdf': 'runtime',
-    // 调试工具
-    'apifox': 'debug', 'postman': 'debug', 'charles': 'debug',
-    'cyberduck': 'debug', 'filezilla': 'debug',
+    // 开发工具（编辑器、终端、容器、API调试、文件传输）
+    'vscode': 'development', 'oh-my-posh': 'development',
+    'windows-terminal': 'development', 'iterm2': 'development',
+    'ffmpeg': 'development',
+    'postman': 'development',
+    'cyberduck': 'development',
     // 效率工具
     'snipaste': 'productivity', 'obsidian': 'productivity', 'excalidraw': 'productivity',
   }
   return tierMap[key] || 'environment'
 }
 
-// Get description by software key
+// Get description by software key - 基于官方文档的真实描述（30-40字）
 function getDescByKey(key: string): string {
   const descMap: Record<string, string> = {
-    'homebrew': 'macOS 包管理器，用于安装和管理软件包。',
-    'nvm': 'Node.js 版本管理器，支持安装和切换多个 Node.js 版本。',
-    'pyenv': 'Python 版本管理器，支持安装和切换多个 Python 版本。',
-    'vscode': '微软开发的轻量级代码编辑器。',
-    'docker': '容器化平台，用于构建和运行应用程序。',
-    'node': 'JavaScript 运行时环境。',
-    'python': '通用编程语言。',
+    // 环境工具
+    'homebrew': 'macOS上流行的包管理器，通过终端一键安装命令行工具与应用程序。',
+    'nvm': 'Node.js版本管理器，支持在多个版本间快速切换，便于项目环境管理。',
+    'pyenv': 'Python版本管理工具，轻松安装和切换多个Python版本，支持虚拟环境。',
+    'jenv': 'Java版本管理工具，可切换不同Java版本并设置环境变量，适配多项目开发。',
+    'scoop': 'Windows命令行软件管理工具，无需管理员权限即可安装常用应用程序。',
+    'sudo': 'Windows下的管理员权限提升工具，支持在普通终端中执行需要管理员权限的命令。',
+    'git': '分布式版本控制系统，支持代码版本管理、分支操作和团队协作开发。',
+    '7zip': '开源压缩解压工具，支持多种格式如ZIP、RAR、7Z等，压缩率高且安全可靠。',
+    'switchhosts': 'Hosts文件管理工具，支持快速切换不同环境的Hosts配置，便于开发测试。',
+    'colortool': 'Windows终端配色方案管理工具，可自定义控制台颜色和主题。',
+    // AI 工具
+    'cursor': 'AI编程代理工具，能自动编写、测试和部署代码，支持多种前沿模型。',
+    'windsurf': 'AI原生编程IDE，支持智能补全、多文件编辑与自主代理模式。',
+    'claude-desktop': 'Anthropic官方桌面应用，提供Claude AI对话、文件分析与代码辅助功能。',
+    'continue': '开源AI编程助手，支持多种大模型接入，在IDE内提供智能代码补全。',
+    'cody': 'Sourcegraph AI编程助手，基于全代码库索引提供上下文感知的代码补全。',
+    'copilot': 'GitHub AI结对编程工具，利用大模型提供实时代码补全与智能建议。',
+    // 开发工具
+    'vscode': '微软推出的开源代码编辑器，内置终端、调试、版本控制等丰富功能。',
+    'oh-my-posh': '跨平台终端美化工具，提供丰富主题和段落配置，支持多种Shell。',
+    'windows-terminal': '微软官方终端应用，支持多标签页、GPU加速渲染与自定义主题。',
+    'iterm2': 'macOS平台终端模拟器，功能丰富，支持分屏、热键与丰富自定义选项。',
+    'ffmpeg': '完整的跨平台多媒体处理工具，用于录制、转换和流式传输音视频。',
+    'postman': 'API开发测试平台，提供API设计、测试、管理与分发的全流程工具。',
+    'cyberduck': '开源多协议文件浏览器，支持FTP、SFTP、S3等云存储服务。',
+    // 效率工具
+    'snipaste': '免费截图工具，支持截图贴屏、标注、取色等功能，提升工作效率。',
+    'obsidian': '本地优先的Markdown笔记工具，支持双向链接与知识图谱，插件丰富。',
+    'excalidraw': '开源在线协作白板，支持手绘风格创建图表、流程图和示意图。',
   }
   return descMap[key] || `${key} 可通过 Forge 进行一键安装与版本管理，支持跨平台同步和状态检测。`
 }
@@ -217,7 +250,6 @@ function getColorByKey(key: string): string {
     'nvm': '#68A063',
     'pyenv': '#3776AB',
     'vscode': '#007ACC',
-    'docker': '#2496ED',
     'cursor': '#5C5C5C',
     'windsurf': '#5C5C5C',
     'claude-desktop': '#D97757',
@@ -232,17 +264,31 @@ function getIconByKey(key: string): string {
     'nvm': '📦',
     'pyenv': '🐍',
     'vscode': '💻',
-    'docker': '🐳',
   }
   return iconMap[key] || key.charAt(0).toUpperCase()
 }
 
-// Platform filter map for mock data
-const platformFilterMap: Record<string, string[]> = {
-  macos: ['Homebrew', 'Cursor', 'Claude Desktop'],
-  windows: ['Copilot', 'Chocolatey', 'Scoop'],
-  linux: [],
-  cross: ['NVM', 'pyenv', 'Cursor', 'Claude Desktop', 'Windsurf', 'Continue', 'Cody', 'Copilot'],
+// 平台过滤逻辑 - 根据软件的 platform 字段进行过滤
+// 后端 platform 字段值: 'Windows', 'macOS', 'Cross-platform'
+// 前端 selectedPlatform 值: 'windows', 'macos', 'unknown'
+function matchesPlatformFilter(sw: Software, filterPlatform: string): boolean {
+  const platform = (sw.platform || '').toLowerCase()
+
+  // 如果选择"未知"，不显示任何软件
+  if (filterPlatform === 'unknown') {
+    return false
+  }
+
+  // 如果选择特定平台（windows 或 macos）
+  // 显示：1) 跨平台软件  2) 与当前选择匹配的平台软件
+  if (filterPlatform === 'windows') {
+    return platform === 'cross-platform' || platform === 'windows'
+  }
+  if (filterPlatform === 'macos') {
+    return platform === 'cross-platform' || platform === 'macos'
+  }
+
+  return false
 }
 
 // Filtered software list
@@ -260,21 +306,23 @@ const filteredSoftware = computed(() => {
 
   // Tier filter - 默认选中环境工具
   if (selectedTier.value) {
-    result = result.filter(sw => sw.tier === selectedTier.value)
+    if (selectedTier.value === 'tools') {
+      // AI工具、开发工具、效率工具合并显示
+      result = result.filter(sw => sw.tier === 'ai-tools' || sw.tier === 'development' || sw.tier === 'productivity')
+    } else {
+      result = result.filter(sw => sw.tier === selectedTier.value)
+    }
   }
 
-  // Platform filter
-  if (selectedPlatform.value !== 'all') {
-    const allowed = platformFilterMap[selectedPlatform.value]
-    if (allowed) {
-      result = result.filter(sw => allowed.includes(sw.name))
-    }
+  // Platform filter - 显示适用于当前选择平台的软件
+  if (selectedPlatform.value) {
+    result = result.filter(sw => matchesPlatformFilter(sw, selectedPlatform.value))
   }
 
   // Status filter
   if (selectedStatus.value === 'detected') {
     result = result.filter(sw => sw.installed)
-  } else if (selectedStatus.value === 'not-found') {
+  } else if (selectedStatus.value === 'not-installed') {
     result = result.filter(sw => !sw.installed)
   }
 
@@ -286,6 +334,33 @@ const softwareCount = computed(() => filteredSoftware.value.length)
 
 onMounted(async () => {
   console.log('SoftwareManagementView mounted, detecting software...')
+
+  // 自动检测当前操作系统并设置默认平台
+  try {
+    console.log('Attempting to detect platform via @tauri-apps/plugin-os...')
+    const currentPlatform = await getPlatform()
+    console.log('Detected platform value:', currentPlatform, '(type:', typeof currentPlatform, ')')
+
+    // 将系统平台映射到我们的选项（支持大小写不敏感比较）
+    const platformLower = currentPlatform.toLowerCase()
+    console.log('Platform (lowercase):', platformLower)
+
+    if (platformLower === 'windows') {
+      selectedPlatform.value = 'windows'
+      console.log('Platform set to: windows')
+    } else if (platformLower === 'macos' || platformLower === 'darwin') {
+      selectedPlatform.value = 'macos'
+      console.log('Platform set to: macos')
+    } else {
+      selectedPlatform.value = 'unknown'
+      console.log('Platform set to: unknown (unsupported platform:', currentPlatform, ')')
+    }
+  } catch (e) {
+    console.warn('Failed to detect platform, falling back to unknown:', e)
+    selectedPlatform.value = 'unknown'
+  }
+
+  // 检测软件
   try {
     await softwareStore.detectSoftware()
     console.log('Software detected:', softwareStore.softwareList.length, 'items')
@@ -328,8 +403,6 @@ function tierLabel(tier: string): string {
     'environment': '环境',
     'ai-tools': 'AI',
     'development': '开发',
-    'runtime': '运行时',
-    'debug': '调试',
     'productivity': '效率',
   }
   return labels[tier] || tier
@@ -377,6 +450,8 @@ async function handleInstall(sw: Software) {
     if (result.success) {
       completeOperation(key, true, result.message || `${sw.name} installed successfully`)
       console.log(result.message || `${sw.name} installed successfully`)
+      // Note: detectSoftwareWithVersions is already called inside installSoftware
+      console.log('Software re-detected after installation')
     } else {
       completeOperation(key, false, result.message || `Failed to install ${sw.name}`)
       console.error(result.message || `Failed to install ${sw.name}`)
@@ -481,7 +556,7 @@ async function handleUninstall(sw: Software) {
             <div class="card-title">
               {{ sw.name }}
               <span class="badge" :class="sw.installed ? 'success' : 'outline'">
-                {{ sw.installed ? 'Detected' : 'Not found' }}
+                {{ sw.installed ? 'Detected' : 'Not installed' }}
               </span>
             </div>
             <div class="card-subtitle">v{{ sw.version }} · {{ sw.platform }} · <span :style="{ color: tierColor(sw.tier), textTransform: 'uppercase', fontWeight: '600', fontSize: '10px', letterSpacing: '0.04em' }">{{ tierLabel(sw.tier) }}</span></div>
@@ -511,18 +586,18 @@ async function handleUninstall(sw: Software) {
             />
           </div>
           <div class="card-footer-right">
-            <!-- Homebrew dependency warning for nvm/pyenv -->
-            <div v-if="requiresHomebrew(sw.key) && !isHomebrewInstalled && !sw.installed" class="homebrew-warning">
+            <!-- 包管理器依赖提示（nvm, pyenv 需要先安装包管理器） -->
+            <div v-if="requiresPackageManager(sw.key) && !isPackageManagerInstalled && !sw.installed" class="homebrew-warning">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <circle cx="12" cy="12" r="10"/>
                 <line x1="12" y1="8" x2="12" y2="12"/>
                 <line x1="12" y1="16" x2="12.01" y2="16"/>
               </svg>
-              <span>需要先安装 Homebrew</span>
+              <span>需要先安装 {{ getPackageManagerName() }}</span>
             </div>
-            <!-- Environment Management button for nvm/pyenv -->
+            <!-- Environment Management button for version managers -->
             <button
-              v-if="['nvm', 'pyenv'].includes(sw.key) && sw.installed"
+              v-if="['nvm', 'pyenv', 'jenv'].includes(sw.key) && sw.installed"
               class="btn btn-secondary btn-sm"
               @click="handleEnvironmentManage(sw)"
             >环境管理</button>
@@ -534,7 +609,7 @@ async function handleUninstall(sw: Software) {
             <button
               v-else
               class="btn btn-primary btn-sm"
-              :disabled="requiresHomebrew(sw.key) && !isHomebrewInstalled"
+              :disabled="requiresPackageManager(sw.key) && !isPackageManagerInstalled"
               @click="handleInstall(sw)"
             >Install</button>
             <DropdownMenu :model-value="openDropdown === sw.key" @update:model-value="(v: boolean) => openDropdown = v ? sw.key : null" :min-width="160">

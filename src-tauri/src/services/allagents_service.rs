@@ -432,10 +432,9 @@ impl AllAgentsService {
     /// 初始化工作区
     pub fn init_workspace(&self, from: Option<&str>) -> Result<(), String> {
         let mut args = vec!["init", "."];
-        let from_arg;
         if let Some(source) = from {
-            from_arg = format!("--from={}", source);
-            args.push(&from_arg);
+            args.push("--from");
+            args.push(source);
         }
 
         self.execute_command(&args, None)?;
@@ -452,23 +451,17 @@ impl AllAgentsService {
     ) -> Result<SyncReport, String> {
         let mut args = vec!["update"];
 
-        let offline_arg;
         if offline {
-            offline_arg = "--offline".to_string();
             args.push("--offline");
         }
 
-        let dry_run_arg;
         if dry_run {
-            dry_run_arg = "--dry-run".to_string();
             args.push("--dry-run");
         }
 
-        let client_arg;
         if let Some(client) = client_filter {
-            client_arg = format!("--client={}", client);
             args.push("--client");
-            args.push(&client_arg);
+            args.push(client);
         }
 
         // 发射开始同步事件
@@ -533,10 +526,9 @@ impl AllAgentsService {
     ) -> Result<String, String> {
         let mut args = vec!["plugin", "install", plugin_spec];
 
-        let scope_arg;
         if let Some(s) = scope {
-            scope_arg = format!("--scope={}", s);
-            args.push(&scope_arg);
+            args.push("--scope");
+            args.push(s);
         }
 
         // 注意: allagents 的 --skill 参数用于过滤，需要逐个传递
@@ -561,10 +553,8 @@ impl AllAgentsService {
     pub fn plugin_list(&self, marketplace: Option<&str>) -> Result<PluginListResult, String> {
         let mut args = vec!["plugin", "list"];
 
-        let marketplace_arg;
         if let Some(m) = marketplace {
-            marketplace_arg = m.to_string();
-            args.push(&marketplace_arg);
+            args.push(m);
         }
 
         let output = self.execute_command(&args, None)?;
@@ -580,10 +570,9 @@ impl AllAgentsService {
     pub fn skill_list(&self, scope: Option<&str>) -> Result<SkillListResult, String> {
         let mut args = vec!["skill", "list"];
 
-        let scope_arg;
         if let Some(s) = scope {
-            scope_arg = format!("--scope={}", s);
-            args.push(&scope_arg);
+            args.push("--scope");
+            args.push(s);
         }
 
         let output = self.execute_command(&args, None)?;
@@ -601,25 +590,19 @@ impl AllAgentsService {
     ) -> Result<String, String> {
         let mut args = vec!["skill", "add", name];
 
-        let from_arg;
         if let Some(f) = from {
-            from_arg = format!("--from={}", f);
             args.push("--from");
-            args.push(&from_arg);
+            args.push(f);
         }
 
-        let plugin_arg;
         if let Some(p) = plugin {
-            plugin_arg = format!("--plugin={}", p);
             args.push("--plugin");
-            args.push(&plugin_arg);
+            args.push(p);
         }
 
-        let scope_arg;
         if let Some(s) = scope {
-            scope_arg = format!("--scope={}", s);
             args.push("--scope");
-            args.push(&scope_arg);
+            args.push(s);
         }
 
         self.execute_command(&args, None)
@@ -634,18 +617,14 @@ impl AllAgentsService {
     ) -> Result<String, String> {
         let mut args = vec!["skill", "remove", name];
 
-        let plugin_arg;
         if let Some(p) = plugin {
-            plugin_arg = format!("--plugin={}", p);
             args.push("--plugin");
-            args.push(&plugin_arg);
+            args.push(p);
         }
 
-        let scope_arg;
         if let Some(s) = scope {
-            scope_arg = format!("--scope={}", s);
             args.push("--scope");
-            args.push(&scope_arg);
+            args.push(s);
         }
 
         self.execute_command(&args, None)
@@ -665,18 +644,14 @@ impl AllAgentsService {
     ) -> Result<String, String> {
         let mut args = vec!["mcp", "add", name, command_or_url];
 
-        let transport_arg;
         if let Some(t) = transport {
-            transport_arg = format!("--transport={}", t);
             args.push("--transport");
-            args.push(&transport_arg);
+            args.push(t);
         }
 
-        let client_arg;
         if let Some(c) = client {
-            client_arg = format!("--client={}", c);
             args.push("--client");
-            args.push(&client_arg);
+            args.push(c);
         }
 
         self.execute_command(&args, None)
@@ -698,9 +673,7 @@ impl AllAgentsService {
     pub fn mcp_update(&self, offline: bool) -> Result<String, String> {
         let mut args = vec!["mcp", "update"];
 
-        let offline_arg;
         if offline {
-            offline_arg = "--offline".to_string();
             args.push("--offline");
         }
 
@@ -720,18 +693,14 @@ impl AllAgentsService {
     ) -> Result<String, String> {
         let mut args = vec!["plugin", "marketplace", "add", source];
 
-        let name_arg;
         if let Some(n) = name {
-            name_arg = format!("--name={}", n);
             args.push("--name");
-            args.push(&name_arg);
+            args.push(n);
         }
 
-        let branch_arg;
         if let Some(b) = branch {
-            branch_arg = format!("--branch={}", b);
             args.push("--branch");
-            args.push(&branch_arg);
+            args.push(b);
         }
 
         self.execute_command(&args, None)

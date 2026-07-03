@@ -3,6 +3,9 @@ use std::path::PathBuf;
 use std::process::Command;
 use thiserror::Error;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 #[derive(Error, Debug)]
 pub enum InstallError {
     #[error("Software '{0}' is not supported")]
@@ -41,6 +44,38 @@ impl SoftwareInstaller {
         Self
     }
 
+    /// 在 Windows 上通过 PowerShell 执行命令，以支持 npm.cmd 等批处理文件。
+    /// 在非 Windows 平台上直接执行。
+    /// 同时添加 CREATE_NO_WINDOW 标志防止控制台弹窗
+    fn run_npm_command(program: &str, args: &[&str]) -> Option<std::process::Output> {
+        if cfg!(target_os = "windows") {
+            let mut full_command = program.to_string();
+            for arg in args {
+                full_command.push(' ');
+                if arg.contains(' ') || arg.contains('@') || arg.contains('/') || arg.contains('"')
+                {
+                    full_command.push('\'');
+                    full_command.push_str(arg);
+                    full_command.push('\'');
+                } else {
+                    full_command.push_str(arg);
+                }
+            }
+            let ps_command = format!("& {{ {} }}", full_command);
+            // Windows: 使用 CREATE_NO_WINDOW 标志防止控制台弹窗
+            let flags: u32 = 0x08000000; // CREATE_NO_WINDOW
+            let creation_flags = flags;
+
+            Command::new("powershell.exe")
+                .args(["-Command", &ps_command])
+                .creation_flags(creation_flags)
+                .output()
+                .ok()
+        } else {
+            Command::new(program).args(args).output().ok()
+        }
+    }
+
     pub fn install(&self, software_key: &str) -> InstallResult<InstallResponse> {
         log::info!("Installing software: {}", software_key);
 
@@ -49,57 +84,49 @@ impl SoftwareInstaller {
             "homebrew" => self.install_homebrew(),
             "vscode" => self.install_vscode(),
             "oh-my-posh" => self.install_oh_my_posh(),
-            "chocolatey" => self.install_chocolatey(),
             "scoop" => self.install_scoop(),
+            "sudo" => self.install_sudo(),
+            "git" => self.install_git(),
+            "7zip" => self.install_7zip(),
+            "switchhosts" => self.install_switchhosts(),
+            "colortool" => self.install_colortool(),
 
             // Tier 2: Language Managers
             "nvm" => self.install_nvm(),
             "pyenv" => self.install_pyenv(),
+            "jenv" => self.install_jenv(),
 
             // Tier 3: Runtime
-            "docker" => self.install_docker(),
             "ffmpeg" => self.install_ffmpeg(),
-            "docker-compose" => self.install_docker_compose(),
 
             // Tier 4: Debug Tools
             "postman" => self.install_postman(),
-            "filezilla" => self.install_filezilla(),
 
             // Tier 5: Productivity
             "obsidian" => self.install_obsidian(),
             "snipaste" => self.install_snipaste(),
 
             // Not directly installable
-            "ssh" => Err(InstallError::NotSupported(
-                "SSH is system-installed. Please use your package manager.".to_string()
-            )),
             "iterm2" => Err(InstallError::NotSupported(
-                "iTerm2 requires macOS manual installation from iterm2.com".to_string()
+                "iTerm2 requires macOS manual installation from iterm2.com".to_string(),
             )),
             "windows-terminal" => Err(InstallError::NotSupported(
-                "Windows Terminal should be installed via Microsoft Store".to_string()
-            )),
-            "goenv" | "jenv" | "asdf" => Err(InstallError::NotSupported(
-                "Version managers require manual installation. See project documentation.".to_string()
-            )),
-            "apifox" => Err(InstallError::NotSupported(
-                "Apifox requires manual installation from apifox.com".to_string()
-            )),
-            "charles" => Err(InstallError::NotSupported(
-                "Charles Proxy requires manual installation".to_string()
+                "Windows Terminal should be installed via Microsoft Store".to_string(),
             )),
             "cyberduck" => Err(InstallError::NotSupported(
-                "Cyberduck requires manual installation".to_string()
+                "Cyberduck requires manual installation".to_string(),
             )),
             "excalidraw" => Err(InstallError::NotSupported(
-                "Excalidraw is a web app at excalidraw.com".to_string()
+                "Excalidraw is a web app at excalidraw.com".to_string(),
             )),
 
             // AI Tools
             "cursor" | "windsurf" | "claude-desktop" | "continue" | "cody" => {
                 Err(InstallError::NotSupported(format!(
                     "{} should be installed from the official website",
-                    software_key.replace('-', " ").split_whitespace()
+                    software_key
+                        .replace('-', " ")
+                        .split_whitespace()
                         .map(|s| s.to_string())
                         .collect::<Vec<_>>()
                         .join(" ")
@@ -118,7 +145,7 @@ impl SoftwareInstaller {
             "oh-my-posh" => self.uninstall_oh_my_posh(),
             "nvm" => self.uninstall_nvm(),
             "pyenv" => self.uninstall_pyenv(),
-            "docker" => self.uninstall_docker(),
+            "jenv" => self.uninstall_jenv(),
             "ffmpeg" => self.uninstall_ffmpeg(),
             "obsidian" => self.uninstall_obsidian(),
             "snipaste" => self.uninstall_snipaste(),
@@ -166,7 +193,10 @@ impl SoftwareInstaller {
             Ok(output) => {
                 let stderr = String::from_utf8_lossy(&output.stderr).to_string();
                 // If it fails due to permissions, provide helpful message
-                if stderr.contains("sudo") || stderr.contains("Permission denied") || stderr.contains("Need sudo access") {
+                if stderr.contains("sudo")
+                    || stderr.contains("Permission denied")
+                    || stderr.contains("Need sudo access")
+                {
                     Err(InstallError::InstallFailed(
                         "Homebrew requires administrator privileges. Please run the following command in Terminal:\n\n/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"\n\nAfter installation, click 'Detect' to refresh.".to_string()
                     ))
@@ -179,8 +209,22 @@ impl SoftwareInstaller {
     }
 
     fn install_vscode(&self) -> InstallResult<InstallResponse> {
-        let result = self.run_and_capture("brew", &["install", "--cask", "visual-studio-code"])
-            .or_else(|_| self.run_and_capture("winget", &["install", "--id", "Microsoft.VisualStudioCode", "--source", "winget", "--accept-package-agreements", "--accept-source-agreements"]));
+        let result = self
+            .run_and_capture("brew", &["install", "--cask", "visual-studio-code"])
+            .or_else(|_| {
+                self.run_and_capture(
+                    "winget",
+                    &[
+                        "install",
+                        "--id",
+                        "Microsoft.VisualStudioCode",
+                        "--source",
+                        "winget",
+                        "--accept-package-agreements",
+                        "--accept-source-agreements",
+                    ],
+                )
+            });
 
         Ok(match result {
             Ok(version) => InstallResponse {
@@ -202,56 +246,120 @@ impl SoftwareInstaller {
     }
 
     fn install_nvm(&self) -> InstallResult<InstallResponse> {
-        self.run_bash_script("https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh")
-            .map(|_| InstallResponse {
-                success: true,
-                message: "nvm installed. Restart shell or run: source ~/.bashrc".to_string(),
-                installed_version: Some("v0.39.7".to_string()),
-            })
+        #[cfg(target_os = "windows")]
+        {
+            // Windows: 使用 scoop 安装 nvm-windows
+            self.run_and_capture("scoop", &["install", "nvm"])
+                .map(|version| InstallResponse {
+                    success: true,
+                    message: "nvm installed successfully via Scoop".to_string(),
+                    installed_version: version,
+                })
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            // macOS/Linux: 使用官方脚本安装
+            self.run_bash_script("https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh")
+                .map(|_| InstallResponse {
+                    success: true,
+                    message: "nvm installed. Restart shell or run: source ~/.bashrc".to_string(),
+                    installed_version: Some("v0.39.7".to_string()),
+                })
+        }
     }
 
     fn install_pyenv(&self) -> InstallResult<InstallResponse> {
-        let result = self.run_and_capture("brew", &["install", "pyenv"]);
-
-        if result.is_ok() {
-            return Ok(InstallResponse {
-                success: true,
-                message: "pyenv installed successfully".to_string(),
-                installed_version: result.ok().flatten(),
-            });
+        #[cfg(target_os = "windows")]
+        {
+            // Windows: 使用 scoop 安装 pyenv-win
+            self.run_and_capture("scoop", &["install", "pyenv"])
+                .map(|version| InstallResponse {
+                    success: true,
+                    message: "pyenv installed successfully via Scoop".to_string(),
+                    installed_version: version,
+                })
         }
-
-        // Try bash script
-        self.run_bash_script("https://pyenv.run")
-            .map(|_| InstallResponse {
-                success: true,
-                message: "pyenv installed successfully".to_string(),
-                installed_version: Some("latest".to_string()),
-            })
-    }
-
-    fn install_docker(&self) -> InstallResult<InstallResponse> {
+        #[cfg(target_os = "macos")]
+        {
+            // macOS: 使用 brew 安装
+            self.run_and_capture("brew", &["install", "pyenv"])
+                .map(|version| InstallResponse {
+                    success: true,
+                    message: "pyenv installed successfully".to_string(),
+                    installed_version: version,
+                })
+        }
         #[cfg(target_os = "linux")]
         {
-            self.run_bash_script("https://get.docker.com")
+            // Linux: 使用官方脚本安装
+            self.run_bash_script("https://pyenv.run")
                 .map(|_| InstallResponse {
                     success: true,
-                    message: "Docker installed successfully".to_string(),
+                    message: "pyenv installed successfully".to_string(),
                     installed_version: Some("latest".to_string()),
                 })
         }
-        #[cfg(not(target_os = "linux"))]
+    }
+
+    fn install_jenv(&self) -> InstallResult<InstallResponse> {
+        #[cfg(target_os = "windows")]
         {
-            Err(InstallError::NotSupported(
-                "Docker Desktop should be installed from docker.com on macOS/Windows".to_string()
-            ))
+            // Windows: 先添加 extras bucket，然后安装 jenv
+            // 如果 extras bucket 不存在，先添加
+            let _ = self.run_and_capture("scoop", &["bucket", "add", "extras"]);
+
+            // 尝试从 extras bucket 安装 jenv
+            self.run_and_capture("scoop", &["install", "extras/jenv"]).or_else(|_| {
+                // 如果 jenv 不可用，使用 jabba 作为替代（jenv 的 Windows 替代品）
+                log::warn!("jenv not available in scoop, falling back to jabba");
+                self.run_and_capture("scoop", &["install", "jabba"])
+            })
+            .map(|version| InstallResponse {
+                success: true,
+                message: "Java version manager installed successfully via Scoop".to_string(),
+                installed_version: version,
+            })
+        }
+        #[cfg(target_os = "macos")]
+        {
+            // macOS: 使用 brew 安装
+            self.run_and_capture("brew", &["install", "jenv"])
+                .map(|version| InstallResponse {
+                    success: true,
+                    message: "jenv installed successfully".to_string(),
+                    installed_version: version,
+                })
+        }
+        #[cfg(target_os = "linux")]
+        {
+            // Linux: 使用 git 安装
+            self.run_bash_script("https://raw.githubusercontent.com/jenv/jenv/master/install.sh")
+                .map(|_| InstallResponse {
+                    success: true,
+                    message: "jenv installed. Restart shell or run: source ~/.bashrc".to_string(),
+                    installed_version: Some("latest".to_string()),
+                })
         }
     }
 
     fn install_ffmpeg(&self) -> InstallResult<InstallResponse> {
-        let result = self.run_and_capture("brew", &["install", "ffmpeg"])
+        let result = self
+            .run_and_capture("brew", &["install", "ffmpeg"])
             .or_else(|_| self.run_and_capture("sudo", &["apt-get", "install", "-y", "ffmpeg"]))
-            .or_else(|_| self.run_and_capture("winget", &["install", "--id", "Gyan.FFmpeg", "--source", "winget", "--accept-package-agreements", "--accept-source-agreements"]));
+            .or_else(|_| {
+                self.run_and_capture(
+                    "winget",
+                    &[
+                        "install",
+                        "--id",
+                        "Gyan.FFmpeg",
+                        "--source",
+                        "winget",
+                        "--accept-package-agreements",
+                        "--accept-source-agreements",
+                    ],
+                )
+            });
 
         Ok(match result {
             Ok(version) => InstallResponse {
@@ -263,61 +371,196 @@ impl SoftwareInstaller {
         })
     }
 
-    fn install_chocolatey(&self) -> InstallResult<InstallResponse> {
-        #[cfg(target_os = "windows")]
-        {
-            let script = r#"Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))"#;
-            self.run_powershell(script)
-                .map(|_| InstallResponse {
-                    success: true,
-                    message: "Chocolatey installed successfully".to_string(),
-                    installed_version: Some("2.x".to_string()),
-                })
-        }
-        #[cfg(not(target_os = "windows"))]
-        {
-            Err(InstallError::NotSupported("Chocolatey is for Windows only".to_string()))
-        }
-    }
-
     fn install_scoop(&self) -> InstallResult<InstallResponse> {
         #[cfg(target_os = "windows")]
         {
-            self.run_powershell("irm get.scoop.sh | iex")
+            // 检查是否已安装 scoop
+            if Command::new("scoop")
+                .arg("--version")
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false)
+            {
+                return Ok(InstallResponse {
+                    success: true,
+                    message: "Scoop is already installed".to_string(),
+                    installed_version: None,
+                });
+            }
+
+            // 使用更可靠的方式安装 Scoop
+            // 先设置执行策略，然后下载并安装
+            let install_script = r#"
+                # 设置执行策略以允许脚本运行
+                Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force -ErrorAction SilentlyContinue
+
+                # 预加载安全模块以避免后续加载失败
+                Import-Module Microsoft.PowerShell.Security -Force -ErrorAction SilentlyContinue
+
+                # 下载并执行 Scoop 安装脚本
+                [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                $url = 'https://get.scoop.sh'
+                $tmp = "$env:TEMP\install_scoop.ps1"
+                (New-Object Net.WebClient).DownloadFile($url, $tmp)
+
+                # 执行安装脚本
+                & $tmp
+            "#;
+            self.run_powershell(install_script)
                 .map(|_| InstallResponse {
                     success: true,
                     message: "Scoop installed successfully".to_string(),
-                    installed_version: Some("1.x".to_string()),
+                    installed_version: Some("0.5.x".to_string()),
                 })
         }
         #[cfg(not(target_os = "windows"))]
         {
-            Err(InstallError::NotSupported("Scoop is for Windows only".to_string()))
+            Err(InstallError::NotSupported(
+                "Scoop is for Windows only".to_string(),
+            ))
         }
     }
 
-    fn install_docker_compose(&self) -> InstallResult<InstallResponse> {
-        #[cfg(target_os = "linux")]
+    fn install_sudo(&self) -> InstallResult<InstallResponse> {
+        #[cfg(target_os = "windows")]
         {
-            self.run_command("sudo", &["curl", "-L", "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64", "-o", "/usr/local/bin/docker-compose"])
-                .and_then(|_| self.run_command("sudo", &["chmod", "+x", "/usr/local/bin/docker-compose"]))
-                .map(|_| InstallResponse {
+            // Windows: 使用 scoop 安装 gsudo
+            self.run_and_capture("scoop", &["install", "gsudo"])
+                .map(|version| InstallResponse {
                     success: true,
-                    message: "Docker Compose installed successfully".to_string(),
-                    installed_version: Some("2.x".to_string()),
+                    message: "Sudo (gsudo) installed successfully via Scoop".to_string(),
+                    installed_version: version,
                 })
         }
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(not(target_os = "windows"))]
         {
             Err(InstallError::NotSupported(
-                "Docker Compose is included with Docker Desktop on macOS/Windows".to_string()
+                "Sudo is system-installed on macOS/Linux".to_string(),
+            ))
+        }
+    }
+
+    fn install_git(&self) -> InstallResult<InstallResponse> {
+        #[cfg(target_os = "windows")]
+        {
+            // Windows: 使用 scoop 安装 git
+            self.run_and_capture("scoop", &["install", "git"])
+                .map(|version| InstallResponse {
+                    success: true,
+                    message: "Git installed successfully via Scoop".to_string(),
+                    installed_version: version,
+                })
+        }
+        #[cfg(target_os = "macos")]
+        {
+            // macOS: 使用 brew 安装
+            self.run_and_capture("brew", &["install", "git"])
+                .map(|version| InstallResponse {
+                    success: true,
+                    message: "Git installed successfully".to_string(),
+                    installed_version: version,
+                })
+        }
+        #[cfg(target_os = "linux")]
+        {
+            // Linux: 使用 apt-get 安装
+            self.run_command("sudo", &["apt-get", "install", "-y", "git"])
+                .map(|_| InstallResponse {
+                    success: true,
+                    message: "Git installed successfully".to_string(),
+                    installed_version: Some("latest".to_string()),
+                })
+        }
+    }
+
+    fn install_7zip(&self) -> InstallResult<InstallResponse> {
+        #[cfg(target_os = "windows")]
+        {
+            // Windows: 使用 scoop 安装 7zip
+            self.run_and_capture("scoop", &["install", "7zip"])
+                .map(|version| InstallResponse {
+                    success: true,
+                    message: "7-Zip installed successfully via Scoop".to_string(),
+                    installed_version: version,
+                })
+        }
+        #[cfg(target_os = "macos")]
+        {
+            // macOS: 使用 brew 安装
+            self.run_and_capture("brew", &["install", "p7zip"])
+                .map(|version| InstallResponse {
+                    success: true,
+                    message: "7-Zip installed successfully".to_string(),
+                    installed_version: version,
+                })
+        }
+        #[cfg(target_os = "linux")]
+        {
+            // Linux: 使用 apt-get 安装
+            self.run_command("sudo", &["apt-get", "install", "-y", "p7zip-full"])
+                .map(|_| InstallResponse {
+                    success: true,
+                    message: "7-Zip installed successfully".to_string(),
+                    installed_version: Some("latest".to_string()),
+                })
+        }
+    }
+
+    fn install_switchhosts(&self) -> InstallResult<InstallResponse> {
+        #[cfg(target_os = "windows")]
+        {
+            // Windows: 使用 scoop 安装 switchhosts
+            self.run_and_capture("scoop", &["install", "extras/switchhosts"])
+                .map(|version| InstallResponse {
+                    success: true,
+                    message: "SwitchHosts installed successfully via Scoop".to_string(),
+                    installed_version: version,
+                })
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            Err(InstallError::NotSupported(
+                "SwitchHosts should be installed from the official website on macOS/Linux".to_string(),
+            ))
+        }
+    }
+
+    fn install_colortool(&self) -> InstallResult<InstallResponse> {
+        #[cfg(target_os = "windows")]
+        {
+            // Windows: 使用 scoop 安装 colortool
+            self.run_and_capture("scoop", &["install", "colortool"])
+                .map(|version| InstallResponse {
+                    success: true,
+                    message: "ColorTool installed successfully via Scoop".to_string(),
+                    installed_version: version,
+                })
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            Err(InstallError::NotSupported(
+                "ColorTool is for Windows only".to_string(),
             ))
         }
     }
 
     fn install_postman(&self) -> InstallResult<InstallResponse> {
-        let result = self.run_and_capture("brew", &["install", "--cask", "postman"])
-            .or_else(|_| self.run_and_capture("winget", &["install", "--id", "Postman.Postman", "--source", "winget", "--accept-package-agreements", "--accept-source-agreements"]));
+        let result = self
+            .run_and_capture("brew", &["install", "--cask", "postman"])
+            .or_else(|_| {
+                self.run_and_capture(
+                    "winget",
+                    &[
+                        "install",
+                        "--id",
+                        "Postman.Postman",
+                        "--source",
+                        "winget",
+                        "--accept-package-agreements",
+                        "--accept-source-agreements",
+                    ],
+                )
+            });
 
         Ok(match result {
             Ok(version) => InstallResponse {
@@ -329,24 +572,23 @@ impl SoftwareInstaller {
         })
     }
 
-    fn install_filezilla(&self) -> InstallResult<InstallResponse> {
-        let result = self.run_and_capture("brew", &["install", "--cask", "filezilla"])
-            .or_else(|_| self.run_and_capture("sudo", &["apt-get", "install", "-y", "filezilla"]))
-            .or_else(|_| self.run_and_capture("winget", &["install", "--id", "FileZilla.FileZilla", "--source", "winget", "--accept-package-agreements", "--accept-source-agreements"]));
-
-        Ok(match result {
-            Ok(version) => InstallResponse {
-                success: true,
-                message: "FileZilla installed successfully".to_string(),
-                installed_version: version,
-            },
-            Err(e) => return Err(e),
-        })
-    }
-
     fn install_obsidian(&self) -> InstallResult<InstallResponse> {
-        let result = self.run_and_capture("brew", &["install", "--cask", "obsidian"])
-            .or_else(|_| self.run_and_capture("winget", &["install", "--id", "Obsidian.Obsidian", "--source", "winget", "--accept-package-agreements", "--accept-source-agreements"]));
+        let result = self
+            .run_and_capture("brew", &["install", "--cask", "obsidian"])
+            .or_else(|_| {
+                self.run_and_capture(
+                    "winget",
+                    &[
+                        "install",
+                        "--id",
+                        "Obsidian.Obsidian",
+                        "--source",
+                        "winget",
+                        "--accept-package-agreements",
+                        "--accept-source-agreements",
+                    ],
+                )
+            });
 
         Ok(match result {
             Ok(version) => InstallResponse {
@@ -370,25 +612,44 @@ impl SoftwareInstaller {
         }
         #[cfg(target_os = "windows")]
         {
-            self.run_and_capture("winget", &["install", "--id", "Snipaste.Snipaste", "--source", "winget", "--accept-package-agreements", "--accept-source-agreements"])
-                .map(|version| InstallResponse {
-                    success: true,
-                    message: "Snipaste installed successfully".to_string(),
-                    installed_version: version,
-                })
+            self.run_and_capture(
+                "winget",
+                &[
+                    "install",
+                    "--id",
+                    "Snipaste.Snipaste",
+                    "--source",
+                    "winget",
+                    "--accept-package-agreements",
+                    "--accept-source-agreements",
+                ],
+            )
+            .map(|version| InstallResponse {
+                success: true,
+                message: "Snipaste installed successfully".to_string(),
+                installed_version: version,
+            })
         }
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
-            Err(InstallError::NotSupported("Snipaste is not available for Linux".to_string()))
+            Err(InstallError::NotSupported(
+                "Snipaste is not available for Linux".to_string(),
+            ))
         }
     }
 
     // ============ Uninstallation Methods ============
 
     fn uninstall_vscode(&self) -> InstallResult<UninstallResponse> {
-        let result = self.run_command("brew", &["uninstall", "--cask", "visual-studio-code"])
+        let result = self
+            .run_command("brew", &["uninstall", "--cask", "visual-studio-code"])
             .or_else(|_| self.run_command("sudo", &["apt-get", "remove", "-y", "code"]))
-            .or_else(|_| self.run_command("winget", &["uninstall", "--id", "Microsoft.VisualStudioCode"]));
+            .or_else(|_| {
+                self.run_command(
+                    "winget",
+                    &["uninstall", "--id", "Microsoft.VisualStudioCode"],
+                )
+            });
 
         Ok(match result {
             Ok(_) => Self::ok_response("VS Code uninstalled successfully"),
@@ -410,9 +671,7 @@ impl SoftwareInstaller {
     }
 
     fn uninstall_nvm(&self) -> InstallResult<UninstallResponse> {
-        let nvm_dir = dirs::home_dir()
-            .map(|p| p.join(".nvm"))
-            .unwrap_or_default();
+        let nvm_dir = dirs::home_dir().map(|p| p.join(".nvm")).unwrap_or_default();
 
         if nvm_dir.exists() {
             std::fs::remove_dir_all(&nvm_dir)
@@ -435,22 +694,22 @@ impl SoftwareInstaller {
         Ok(Self::ok_response("pyenv uninstalled (directory removed)"))
     }
 
-    fn uninstall_docker(&self) -> InstallResult<UninstallResponse> {
-        #[cfg(target_os = "linux")]
-        {
-            self.run_command("sudo", &["apt-get", "remove", "-y", "docker-ce", "docker-ce-cli", "containerd", "dockerd", "docker-compose-plugin"])
-                .map(|_| Self::ok_response("Docker uninstalled successfully"))
+    fn uninstall_jenv(&self) -> InstallResult<UninstallResponse> {
+        let jenv_dir = dirs::home_dir()
+            .map(|p| p.join(".jenv"))
+            .unwrap_or_default();
+
+        if jenv_dir.exists() {
+            std::fs::remove_dir_all(&jenv_dir)
+                .map_err(|e| InstallError::CommandFailed(e.to_string()))?;
         }
-        #[cfg(not(target_os = "linux"))]
-        {
-            Err(InstallError::NotSupported(
-                "Docker Desktop should be uninstalled from Applications".to_string()
-            ))
-        }
+
+        Ok(Self::ok_response("jenv uninstalled (directory removed)"))
     }
 
     fn uninstall_ffmpeg(&self) -> InstallResult<UninstallResponse> {
-        let result = self.run_command("brew", &["uninstall", "ffmpeg"])
+        let result = self
+            .run_command("brew", &["uninstall", "ffmpeg"])
             .or_else(|_| self.run_command("sudo", &["apt-get", "remove", "-y", "ffmpeg"]))
             .or_else(|_| self.run_command("winget", &["uninstall", "--id", "Gyan.FFmpeg"]));
 
@@ -461,7 +720,8 @@ impl SoftwareInstaller {
     }
 
     fn uninstall_obsidian(&self) -> InstallResult<UninstallResponse> {
-        let result = self.run_command("brew", &["uninstall", "--cask", "obsidian"])
+        let result = self
+            .run_command("brew", &["uninstall", "--cask", "obsidian"])
             .or_else(|_| self.run_command("winget", &["uninstall", "--id", "Obsidian.Obsidian"]));
 
         Ok(match result {
@@ -483,7 +743,9 @@ impl SoftwareInstaller {
         }
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
-            Err(InstallError::NotSupported("Snipaste is not available for this platform".to_string()))
+            Err(InstallError::NotSupported(
+                "Snipaste is not available for this platform".to_string(),
+            ))
         }
     }
 
@@ -501,16 +763,20 @@ impl SoftwareInstaller {
         if self.any_npm_candidate_installed(&npm_candidates) {
             for pkg in &npm_candidates {
                 log::info!("Trying npm uninstall for package: {}", pkg);
-                let _ = Command::new("npm")
-                    .args(["uninstall", "-g", pkg])
-                    .output();
+                let _ = Self::run_npm_command("npm", &["uninstall", "-g", pkg]);
 
                 // After each attempt, check if ANY candidate is still installed.
                 // If all are gone, the uninstall succeeded.
                 if self.all_npm_candidates_removed(&npm_candidates) {
-                    return Ok(Self::ok_response(&format!("{} uninstalled via npm", software_key)));
+                    return Ok(Self::ok_response(&format!(
+                        "{} uninstalled via npm",
+                        software_key
+                    )));
                 }
-                log::info!("Package still exists after uninstalling {}, trying next candidate", pkg);
+                log::info!(
+                    "Package still exists after uninstalling {}, trying next candidate",
+                    pkg
+                );
             }
         }
 
@@ -520,7 +786,10 @@ impl SoftwareInstaller {
             .output()
         {
             if output.status.success() {
-                return Ok(Self::ok_response(&format!("{} uninstalled via brew", software_key)));
+                return Ok(Self::ok_response(&format!(
+                    "{} uninstalled via brew",
+                    software_key
+                )));
             }
         }
 
@@ -532,7 +801,10 @@ impl SoftwareInstaller {
                 .output()
             {
                 if output.status.success() {
-                    return Ok(Self::ok_response(&format!("{} uninstalled via brew cask", software_key)));
+                    return Ok(Self::ok_response(&format!(
+                        "{} uninstalled via brew cask",
+                        software_key
+                    )));
                 }
             }
         }
@@ -543,7 +815,10 @@ impl SoftwareInstaller {
             .output()
         {
             if output.status.success() {
-                return Ok(Self::ok_response(&format!("{} uninstalled via pip", software_key)));
+                return Ok(Self::ok_response(&format!(
+                    "{} uninstalled via pip",
+                    software_key
+                )));
             }
         }
 
@@ -555,7 +830,10 @@ impl SoftwareInstaller {
                 // Partial success: user-level files removed, but system-level files need manual deletion
                 return Ok(UninstallResponse {
                     success: true,
-                    message: format!("{} partially uninstalled. Some files need manual removal.", software_key),
+                    message: format!(
+                        "{} partially uninstalled. Some files need manual removal.",
+                        software_key
+                    ),
                     needs_manual: true,
                     manual_commands: manual_cmds,
                 });
@@ -621,10 +899,7 @@ impl SoftwareInstaller {
         // NOTE: npm list can exit with non-zero even when package IS installed
         // (e.g. broken peer deps), so we check stdout content, not exit code.
         for pkg in candidates {
-            if let Ok(output) = Command::new("npm")
-                .args(["list", "-g", "--depth=0", pkg])
-                .output()
-            {
+            if let Some(output) = Self::run_npm_command("npm", &["list", "-g", "--depth=0", pkg]) {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 if stdout.contains(pkg) {
                     log::info!("Package {} still installed", pkg);
@@ -641,10 +916,7 @@ impl SoftwareInstaller {
         // NOTE: npm list can exit with non-zero even when package IS installed
         // (e.g. broken peer deps), so we check stdout content, not exit code.
         for pkg in candidates {
-            if let Ok(output) = Command::new("npm")
-                .args(["list", "-g", "--depth=0", pkg])
-                .output()
-            {
+            if let Some(output) = Self::run_npm_command("npm", &["list", "-g", "--depth=0", pkg]) {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 if stdout.contains(pkg) {
                     log::info!("Found installed npm package: {}", pkg);
@@ -661,7 +933,11 @@ impl SoftwareInstaller {
         // with symlinks + a data directory under ~/.local/share/<name>.
         // Remove the symlinks and the data directory if they exist.
         let (binary_names, data_dir_name, system_paths) = match software_key {
-            "cursor" => (vec!["cursor-agent", "agent"], "cursor-agent", vec![] as Vec<String>),
+            "cursor" => (
+                vec!["cursor-agent", "agent"],
+                "cursor-agent",
+                vec![] as Vec<String>,
+            ),
             "hermes" => (vec!["hermes", "hermes-agent"], "hermes", vec![]),
             "opencode" => (vec!["opencode"], "opencode", vec![]),
             _ => return None,
@@ -724,39 +1000,151 @@ impl SoftwareInstaller {
     }
 
     fn run_command(&self, program: &str, args: &[&str]) -> InstallResult<()> {
-        Command::new(program)
-            .args(args)
-            .output()
-            .map_err(|e| InstallError::CommandFailed(e.to_string()))
-            .and_then(|output| {
-                if output.status.success() {
-                    Ok(())
+        // Windows 上通过 PowerShell 执行，以支持 scoop.cmd 等批处理文件
+        // 添加 CREATE_NO_WINDOW 标志防止控制台弹窗
+        let output = if cfg!(target_os = "windows") {
+            let mut full_command = program.to_string();
+            for arg in args {
+                full_command.push(' ');
+                if arg.contains(' ') || arg.contains('@') || arg.contains('/') || arg.contains('"')
+                {
+                    full_command.push('\'');
+                    full_command.push_str(arg);
+                    full_command.push('\'');
                 } else {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    Err(InstallError::InstallFailed(stderr.to_string()))
+                    full_command.push_str(arg);
                 }
-            })
+            }
+            let ps_command = format!("& {{ {} }}", full_command);
+            // Windows: 使用 CREATE_NO_WINDOW 标志防止控制台弹窗
+            let flags: u32 = 0x08000000; // CREATE_NO_WINDOW
+            let creation_flags = flags;
+
+            Command::new("powershell.exe")
+                .args(["-Command", &ps_command])
+                .creation_flags(creation_flags)
+                .output()
+                .map_err(|e| InstallError::CommandFailed(e.to_string()))
+        } else {
+            Command::new(program)
+                .args(args)
+                .output()
+                .map_err(|e| InstallError::CommandFailed(e.to_string()))
+        };
+
+        output.and_then(|output| {
+            if output.status.success() {
+                Ok(())
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                Err(InstallError::InstallFailed(stderr.to_string()))
+            }
+        })
     }
 
     fn run_and_capture(&self, program: &str, args: &[&str]) -> InstallResult<Option<String>> {
-        Command::new(program)
-            .args(args)
-            .output()
-            .map_err(|e| InstallError::CommandFailed(e.to_string()))
-            .and_then(|output| {
-                if output.status.success() {
-                    let stdout = String::from_utf8_lossy(&output.stdout);
-                    let version = stdout.trim().to_string();
-                    if version.is_empty() {
-                        Ok(None)
-                    } else {
-                        Ok(Some(version))
-                    }
+        // Windows 上通过 PowerShell 执行，以支持 scoop.cmd 等批处理文件
+        // 添加 CREATE_NO_WINDOW 标志防止控制台弹窗
+        let output = if cfg!(target_os = "windows") {
+            let mut full_command = program.to_string();
+            for arg in args {
+                full_command.push(' ');
+                if arg.contains(' ') || arg.contains('@') || arg.contains('/') || arg.contains('"')
+                {
+                    full_command.push('\'');
+                    full_command.push_str(arg);
+                    full_command.push('\'');
                 } else {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    Err(InstallError::InstallFailed(stderr.to_string()))
+                    full_command.push_str(arg);
                 }
-            })
+            }
+            let ps_command = format!("& {{ {} }}", full_command);
+            // Windows: 使用 CREATE_NO_WINDOW 标志防止控制台弹窗
+            let flags: u32 = 0x08000000; // CREATE_NO_WINDOW
+            let creation_flags = flags;
+
+            Command::new("powershell.exe")
+                .args(["-Command", &ps_command])
+                .creation_flags(creation_flags)
+                .output()
+                .map_err(|e| InstallError::CommandFailed(e.to_string()))
+        } else {
+            Command::new(program)
+                .args(args)
+                .output()
+                .map_err(|e| InstallError::CommandFailed(e.to_string()))
+        };
+
+        output.and_then(|output| {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let version = self.extract_version_from_output(&stdout);
+                if version.is_empty() {
+                    Ok(None)
+                } else {
+                    Ok(Some(version))
+                }
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                Err(InstallError::InstallFailed(stderr.to_string()))
+            }
+        })
+    }
+
+    /// 从命令输出中提取纯版本号
+    /// 支持多种格式：
+    /// - "Installing gsudo (2.6.1)..." -> "2.6.1"
+    /// - "gsudo version: 2.6.1" -> "2.6.1"
+    /// - "2.6.1" -> "2.6.1"
+    /// - "v2.6.1" -> "2.6.1"
+    fn extract_version_from_output(&self, output: &str) -> String {
+        for line in output.lines() {
+            // 格式1: "Installing xxx (version)..."
+            if let Some(start) = line.find('(') {
+                if let Some(end) = line.find(')') {
+                    let version = line[start + 1..end].trim().to_string();
+                    if !version.is_empty()
+                        && version
+                            .chars()
+                            .next()
+                            .map_or(false, |c| c.is_ascii_digit())
+                    {
+                        return version;
+                    }
+                }
+            }
+
+            // 格式2: "xxx version: version" 或 "xxx version version"
+            if line.contains("version") || line.contains("Version") {
+                if let Some(pos) = line.find(':') {
+                    let version = line[pos + 1..].trim().to_string();
+                    if !version.is_empty() {
+                        return version;
+                    }
+                }
+            }
+
+            // 格式3: 纯版本号 (可能带v前缀)
+            let trimmed = line.trim();
+            if !trimmed.is_empty() {
+                let version = if trimmed.starts_with('v') || trimmed.starts_with('V') {
+                    trimmed[1..].to_string()
+                } else {
+                    trimmed.to_string()
+                };
+                // 验证是否是有效的版本号格式
+                if version
+                    .chars()
+                    .next()
+                    .map_or(false, |c| c.is_ascii_digit())
+                    && version.contains('.')
+                {
+                    return version;
+                }
+            }
+        }
+
+        output.trim().to_string()
     }
 
     fn run_bash_script(&self, url: &str) -> InstallResult<()> {
@@ -775,8 +1163,32 @@ impl SoftwareInstaller {
     }
 
     fn run_powershell(&self, script: &str) -> InstallResult<()> {
-        Command::new("powershell")
-            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script])
+        // 尝试使用 pwsh (PowerShell 7+)，如果不可用则使用 powershell
+        // 添加 CREATE_NO_WINDOW 标志防止控制台弹窗
+        let powershell_cmd = if Command::new("pwsh")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
+            "pwsh"
+        } else {
+            "powershell"
+        };
+
+        // Windows: 使用 CREATE_NO_WINDOW 标志防止控制台弹窗
+        let flags: u32 = 0x08000000; // CREATE_NO_WINDOW
+        let creation_flags = flags;
+
+        Command::new(powershell_cmd)
+            .args([
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                script,
+            ])
+            .creation_flags(creation_flags)
             .output()
             .map_err(|e| InstallError::CommandFailed(e.to_string()))
             .and_then(|output| {
@@ -784,7 +1196,18 @@ impl SoftwareInstaller {
                     Ok(())
                 } else {
                     let stderr = String::from_utf8_lossy(&output.stderr);
-                    Err(InstallError::InstallFailed(stderr.to_string()))
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    // 如果有错误输出，返回错误
+                    if !stderr.is_empty() {
+                        Err(InstallError::InstallFailed(stderr.to_string()))
+                    } else if !stdout.is_empty() {
+                        // 有时错误会输出到 stdout
+                        Err(InstallError::InstallFailed(stdout.to_string()))
+                    } else {
+                        Err(InstallError::InstallFailed(
+                            "Unknown error occurred".to_string(),
+                        ))
+                    }
                 }
             })
     }
