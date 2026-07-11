@@ -5,7 +5,7 @@ interface Props {
   animated?: boolean
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   lines: 3,
   height: '14px',
   animated: true,

@@ -16,7 +16,13 @@ export type PluginSourceType = 'marketplace' | 'github' | 'local' | 'url';
 export type PluginContentType = 'skill' | 'agent' | 'rule' | 'mcp' | 'hook' | 'command';
 
 /** 同步状态 */
-export type SyncStatus = 'synced' | 'pending' | 'error' | 'conflict' | 'unknown';
+export type SyncStatus =
+  | 'synced'
+  | 'pending'
+  | 'partial'
+  | 'error'
+  | 'conflict'
+  | 'unknown';
 
 /** 作用域 */
 export type PluginScope = 'user' | 'project';
@@ -225,9 +231,9 @@ export interface WorkspaceConfig {
 // 支持的客户端列表
 // ============================================================================
 
-/** AllAgents 支持的 23+ 个客户端 */
+/** AllAgents 支持的客户端 (23个) */
 export const SUPPORTED_CLIENTS = [
-  // 通用客户端 (共享 .agents/skills/)
+  // 通用客户端 (Universal Clients - 共享 .agents/skills/)
   'copilot',
   'codex',
   'opencode',
@@ -237,10 +243,11 @@ export const SUPPORTED_CLIENTS = [
   'replit',
   'kimi',
 
-  // 提供商专属客户端
+  // 提供商专属客户端 (Provider-Specific Clients)
   'claude',
   'cursor',
   'factory',
+  'openclaw',
   'windsurf',
   'cline',
   'continue',
@@ -252,7 +259,6 @@ export const SUPPORTED_CLIENTS = [
   'junie',
   'openhands',
   'kiro',
-  'universal',
 ] as const;
 
 export type ClientType = typeof SUPPORTED_CLIENTS[number];
@@ -281,7 +287,7 @@ export const CLIENT_DISPLAY_NAMES: Record<ClientType, string> = {
   kiro: 'Kiro',
   replit: 'Replit',
   kimi: 'Kimi',
-  universal: 'Universal',
+  openclaw: 'OpenClaw',
 };
 
 /** 客户端图标路径映射 */
@@ -308,7 +314,34 @@ export const CLIENT_ICONS: Record<ClientType, string> = {
   kiro: '/icons/kiro.svg',
   replit: '/icons/replit.svg',
   kimi: '/icons/kimi.svg',
-  universal: '/icons/universal.svg',
+  openclaw: '/icons/openclaw.svg',
+};
+
+/** 客户端品牌主色映射 */
+export const CLIENT_COLORS: Record<ClientType, string> = {
+  claude: '#D97706',
+  copilot: '#6E40C9',
+  codex: '#10A37F',
+  cursor: '#7C3AED',
+  opencode: '#3B82F6',
+  gemini: '#4285F4',
+  factory: '#F59E0B',
+  ampcode: '#8B5CF6',
+  vscode: '#007ACC',
+  windsurf: '#3B82F6',
+  cline: '#10B981',
+  continue: '#6366F1',
+  roo: '#EC4899',
+  kilo: '#8B5CF6',
+  trae: '#F97316',
+  augment: '#6366F1',
+  zencoder: '#14B8A6',
+  junie: '#84CC16',
+  openhands: '#F59E0B',
+  kiro: '#3B82F6',
+  replit: '#F97316',
+  kimi: '#8B5CF6',
+  openclaw: '#3B82F6',
 };
 
 // ============================================================================

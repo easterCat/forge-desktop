@@ -5,7 +5,7 @@
       <!-- Header -->
       <div class="dialog-header">
         <h3>MCP Sync Settings</h3>
-        <button class="close-btn" @click="$emit('close')" aria-label="关闭">
+        <button class="close-btn" aria-label="关闭" @click="$emit('close')">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/>
             <line x1="6" y1="6" x2="18" y2="18"/>
@@ -74,8 +74,8 @@
               <div class="form-group">
                 <label>Agent Name</label>
                 <input
-                  type="text"
                   v-model="newTarget.name"
+                  type="text"
                   placeholder="e.g., Claude Desktop"
                 />
               </div>
@@ -90,8 +90,8 @@
             <div class="form-group">
               <label>Config File Path</label>
               <input
-                type="text"
                 v-model="newTarget.path"
+                type="text"
                 placeholder="e.g., ~/.config/claude/mcp.json"
               />
             </div>
@@ -123,17 +123,17 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import type { MCPSyncTarget } from '@/types';
+import type { MarketplaceMCPSyncTarget } from '@/types';
 
 interface Props {
-  targets: MCPSyncTarget[];
+  targets: MarketplaceMCPSyncTarget[];
 }
 
 defineProps<Props>();
 
 const emit = defineEmits<{
   (e: 'close'): void;
-  (e: 'add', target: MCPSyncTarget): void;
+  (e: 'add', target: MarketplaceMCPSyncTarget): void;
   (e: 'remove', targetId: string): void;
 }>();
 
@@ -144,7 +144,7 @@ const newTarget = ref({
 });
 
 function addTarget() {
-  const target: MCPSyncTarget = {
+  const target: MarketplaceMCPSyncTarget = {
     id: `custom-${Date.now()}`,
     name: newTarget.value.name,
     path: newTarget.value.path,

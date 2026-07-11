@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref } from 'vue';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warn'
 

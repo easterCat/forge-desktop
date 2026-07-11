@@ -5,7 +5,7 @@
       <!-- Header -->
       <div class="dialog-header">
         <h3>导入本地已有技能</h3>
-        <button class="close-btn" @click="$emit('close')" aria-label="关闭">
+        <button class="close-btn" aria-label="关闭" @click="$emit('close')">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/>
             <line x1="6" y1="6" x2="18" y2="18"/>
@@ -19,14 +19,14 @@
         <div class="form-group">
           <label>扫描目录</label>
           <div class="path-select">
-            <select v-model="selectedPath" @change="handlePathChange" :disabled="isScanning">
+            <select v-model="selectedPath" :disabled="isScanning" @change="handlePathChange">
               <option value="">-- 选择目录 --</option>
               <option v-for="path in detectedPaths" :key="path" :value="path">
                 {{ formatPath(path) }}
               </option>
               <option value="custom">自定义目录...</option>
             </select>
-            <button class="btn btn-secondary btn-sm" @click="scanDirectory" :disabled="!selectedPath || isScanning">
+            <button class="btn btn-secondary btn-sm" :disabled="!selectedPath || isScanning" @click="scanDirectory">
               <svg v-if="isScanning" class="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 12a9 9 0 11-6.219-8.56"/>
               </svg>
@@ -36,16 +36,16 @@
               {{ isScanning ? '扫描中...' : '扫描' }}
             </button>
           </div>
-          <span class="hint" v-if="detectedPaths.length === 0">
+          <span v-if="detectedPaths.length === 0" class="hint">
             未检测到 Agent CLI skills 目录，请手动选择
           </span>
         </div>
 
         <!-- Skills List -->
-        <div class="skills-list" v-if="localSkills.length > 0">
+        <div v-if="localSkills.length > 0" class="skills-list">
           <div class="list-header">
             <label class="checkbox-label">
-              <input type="checkbox" v-model="selectAll" @change="handleSelectAll" />
+              <input v-model="selectAll" type="checkbox" @change="handleSelectAll" />
               <span class="checkbox-custom"></span>
               <span>全选</span>
             </label>
@@ -76,8 +76,8 @@
               </div>
               <div class="skill-info">
                 <span class="skill-name">{{ skill.name }}</span>
-                <span class="skill-desc" v-if="skill.description">{{ skill.description }}</span>
-                <span class="skill-desc skill-no-md" v-else>无描述文件</span>
+                <span v-if="skill.description" class="skill-desc">{{ skill.description }}</span>
+                <span v-else class="skill-desc skill-no-md">无描述文件</span>
               </div>
               <span v-if="skill.has_skill_md" class="has-md-badge">有效</span>
             </div>
@@ -94,11 +94,11 @@
         </div>
 
         <!-- Import Method -->
-        <div class="form-group" v-if="selectedSkills.length > 0">
+        <div v-if="selectedSkills.length > 0" class="form-group">
           <label>导入方式</label>
           <div class="import-methods">
             <label class="method-option" :class="{ active: importMethod === 'copy' }">
-              <input type="radio" v-model="importMethod" value="copy" />
+              <input v-model="importMethod" type="radio" value="copy" />
               <div class="method-content">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
@@ -109,7 +109,7 @@
               </div>
             </label>
             <label class="method-option" :class="{ active: importMethod === 'symlink' }">
-              <input type="radio" v-model="importMethod" value="symlink" />
+              <input v-model="importMethod" type="radio" value="symlink" />
               <div class="method-content">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>
@@ -123,12 +123,12 @@
         </div>
 
         <!-- Target Directory -->
-        <div class="form-group" v-if="selectedSkills.length > 0">
+        <div v-if="selectedSkills.length > 0" class="form-group">
           <label>安装到</label>
           <div class="path-input">
             <input
-              type="text"
               v-model="targetDir"
+              type="text"
               placeholder="选择安装目录..."
               readonly
             />
@@ -153,7 +153,7 @@
         <div v-if="importResults.length > 0" class="import-results">
           <div class="results-summary">
             <span class="success-count">{{ successCount }} 成功</span>
-            <span class="fail-count" v-if="failCount > 0">{{ failCount }} 失败</span>
+            <span v-if="failCount > 0" class="fail-count">{{ failCount }} 失败</span>
           </div>
         </div>
       </div>

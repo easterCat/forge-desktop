@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable @typescript-eslint/no-require-imports */
 /**
  * Node.js Icon Generator for Forge
  * Uses sharp library to convert SVG to PNG

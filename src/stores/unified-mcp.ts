@@ -14,10 +14,9 @@ import type {
   McpTransport,
   McpHealthStatus,
   AuditEntry,
-  SyncTarget,
   ClientType,
 } from '@/types/unified-plugin';
-import { SUPPORTED_CLIENTS } from '@/types/unified-plugin';
+
 
 // ============================================================================
 // Store 定义
@@ -104,13 +103,17 @@ export const useUnifiedMcpStore = defineStore('unified-mcp', () => {
 
     try {
       // 从 allagents 获取 MCP 列表
-      const result = await invoke<{ success: boolean; data?: any; error?: string }>(
+      const result = await invoke<{
+        success: boolean;
+        data?: { servers?: unknown[] };
+        error?: string;
+      }>(
         'allagents_mcp_list',
         { workspacePath: '' }
       );
 
       if (result.success && result.data?.servers) {
-        servers.value = result.data.servers.map((s: any) =>
+        servers.value = result.data.servers.map((s) =>
           convertAllagentsMcp(s)
         );
       }
@@ -256,7 +259,7 @@ export const useUnifiedMcpStore = defineStore('unified-mcp', () => {
   /** 检查单个服务器健康状态 */
   async function checkHealth(serverName: string): Promise<McpHealthStatus> {
     try {
-      const result = await invoke<{ success: boolean; data?: any }>(
+      const result = await invoke<{ success: boolean; data?: unknown }>(
         'check_mcp_service_health',
         { serviceName: serverName }
       );
@@ -330,7 +333,7 @@ export const useUnifiedMcpStore = defineStore('unified-mcp', () => {
   /** 加载分组 */
   async function fetchGroups(): Promise<void> {
     try {
-      const result = await invoke<{ success: boolean; data?: any }>(
+      const result = await invoke<{ success: boolean; data?: { id: string; name: string; serverNames: string[] }[] }>(
         'get_mcp_groups'
       );
 
@@ -449,16 +452,18 @@ export const useUnifiedMcpStore = defineStore('unified-mcp', () => {
   // ==========================================================================
 
   /** 将 allagents MCP 转换为 UnifiedMCP */
-  function convertAllagentsMcp(raw: any): UnifiedMCP {
+  function convertAllagentsMcp(raw: unknown): UnifiedMCP {
+    const r = raw as Record<string, unknown>;
+    const transport = String(r.type ?? 'stdio') as McpTransport;
     return {
-      name: raw.name,
-      transport: raw.type,
-      url: raw.url,
-      command: raw.command,
-      args: raw.args,
-      env: raw.env,
-      headers: raw.headers,
-      clients: raw.clients,
+      name: String(r.name ?? ''),
+      transport,
+      url: String(r.url ?? ''),
+      command: String(r.command ?? ''),
+      args: Array.isArray(r.args) ? (r.args as string[]) : [],
+      env: (r.env && typeof r.env === 'object') ? (r.env as Record<string, string>) : {},
+      headers: (r.headers && typeof r.headers === 'object') ? (r.headers as Record<string, string>) : {},
+      clients: Array.isArray(r.clients) ? (r.clients as string[]) : [],
       groupIds: [],
       tags: [],
       healthStatus: 'unknown',

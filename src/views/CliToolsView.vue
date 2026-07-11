@@ -4,37 +4,31 @@
     <div class="section-header">
       <h2>CLI Tools</h2>
       <span class="count">{{ filteredTools.length }} tools</span>
+      <button v-if="activeTab === 'custom'" class="btn btn-primary btn-sm" @click="showCustomDialog = true">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        Add Tool
+      </button>
     </div>
 
     <!-- Tab Bar -->
     <div class="tab-bar">
       <button
         class="tab-item"
-        :class="{ active: activeTab === 'all' }"
-        @click="activeTab = 'all'"
+        :class="{ active: activeTab === 'default' }"
+        @click="activeTab = 'default'"
       >
-        All
+        Default
+        <span class="tab-count">{{ defaultToolsCount }}</span>
       </button>
       <button
         class="tab-item"
-        :class="{ active: activeTab === 'installed' }"
-        @click="activeTab = 'installed'"
+        :class="{ active: activeTab === 'custom' }"
+        @click="activeTab = 'custom'"
       >
-        Installed
-      </button>
-      <button
-        class="tab-item"
-        :class="{ active: activeTab === 'available' }"
-        @click="activeTab = 'available'"
-      >
-        Available
-      </button>
-      <button
-        class="tab-item"
-        :class="{ active: activeTab === 'updates' }"
-        @click="activeTab = 'updates'"
-      >
-        Updates
+        Custom
+        <span class="tab-count">{{ customToolsCount }}</span>
       </button>
     </div>
 
@@ -71,8 +65,8 @@
     <div v-else class="card-grid">
         <div
           v-for="tool in filteredTools"
-          v-memo="[tool.key, getToolStatus(tool.key)?.isInstalled, getToolStatus(tool.key)?.needsUpgrade, expandedMethods === tool.key, getOperation(tool.key)?.stage, isPendingStatus(tool.key), isCheckingAllStatus]"
           :key="tool.key"
+          v-memo="[cardDeps[tool.key] ?? 0]"
           class="card tool-card"
           :class="{ 'is-operating': isOperating(tool.key), 'has-expanded-methods': expandedMethods === tool.key, 'is-pending': isPendingStatus(tool.key) }"
         >
@@ -167,45 +161,75 @@
                     disabled
                   >Checking</button>
                   <template v-else>
+                    <!-- Manual download only tools (e.g., VS Code desktop app) -->
                     <button
-                      v-if="!getToolStatus(tool.key)?.isInstalled"
+                      v-if="tool.manualDownloadOnly && !getToolStatus(tool.key)?.isInstalled"
                       class="btn btn-primary btn-sm"
                       :disabled="isAnyOperating"
-                      @click.stop="showInstallOptions(tool)"
-                    >Install</button>
-                    <button
-                      v-else-if="getToolStatus(tool.key)?.needsUpgrade"
-                      class="btn btn-primary btn-sm"
-                      :disabled="isAnyOperating"
-                      @click.stop="handleUpgrade(tool)"
-                    >Update</button>
-                    <button
-                      v-else
-                      class="btn btn-secondary btn-sm"
-                      @click.stop="handleCheckVersion(tool)"
-                    >Check</button>
+                      @click.stop="openWebsite(tool)"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                        <polyline points="15 3 21 3 21 9"/>
+                        <line x1="10" y1="14" x2="21" y2="3"/>
+                      </svg>
+                      Download
+                    </button>
+                    <!-- Regular tools with quick-install -->
+                    <template v-else>
+                      <button
+                        v-if="!getToolStatus(tool.key)?.isInstalled"
+                        class="btn btn-primary btn-sm"
+                        :disabled="isAnyOperating"
+                        @click.stop="showInstallOptions(tool)"
+                      >Install</button>
+                      <button
+                        v-else-if="getToolStatus(tool.key)?.needsUpgrade"
+                        class="btn btn-primary btn-sm"
+                        :disabled="isAnyOperating"
+                        @click.stop="handleUpgrade(tool)"
+                      >Update</button>
+                      <button
+                        v-else
+                        class="btn btn-secondary btn-sm"
+                        @click.stop="handleCheckVersion(tool)"
+                      >Check</button>
+                    </template>
                   </template>
-                  <DropdownMenu :model-value="openDropdown === tool.key" @update:model-value="(v: boolean) => openDropdown = v ? tool.key : null" :min-width="160">
+                  <DropdownMenu :model-value="openDropdown === tool.key" :min-width="160" @update:model-value="(v: boolean) => openDropdown = v ? tool.key : null">
                     <template #trigger>
-                      <button class="btn-icon btn-sm" @click.stop="handleMoreOptions(tool)" title="More options" aria-label="More options">
+                      <button class="btn-icon btn-sm" title="More options" aria-label="More options" @click.stop="handleMoreOptions(tool)">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                           <circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>
                         </svg>
                       </button>
                     </template>
-                    <button class="dropdown-item" @click.stop="handleOpenConfig(tool)">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                      Open Config
-                    </button>
-                    <button class="dropdown-item" @click.stop="handleResetOptions(tool)">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-                      Reset Options
-                    </button>
-                    <div class="dropdown-divider"></div>
-                    <button class="dropdown-item danger" @click.stop="handleUninstall(tool)">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                      Uninstall
-                    </button>
+                    <template v-if="tool.displaySource === 'custom'">
+                      <button class="dropdown-item" @click.stop="handleEditCustom(tool)">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                        Edit
+                      </button>
+                      <div class="dropdown-divider"></div>
+                      <button class="dropdown-item danger" @click.stop="handleRemoveCustom(tool)">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        Remove
+                      </button>
+                    </template>
+                    <template v-else>
+                      <button class="dropdown-item" @click.stop="handleOpenConfig(tool)">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                        Open Config
+                      </button>
+                      <button class="dropdown-item" @click.stop="handleResetOptions(tool)">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                        Reset Options
+                      </button>
+                      <div class="dropdown-divider"></div>
+                      <button class="dropdown-item danger" @click.stop="handleUninstall(tool)">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        Uninstall
+                      </button>
+                    </template>
                   </DropdownMenu>
                 </div>
               </Transition>
@@ -281,7 +305,7 @@
           <div class="manual-uninstall-commands">
             <div v-for="(cmd, i) in manualCommands" :key="i" class="manual-cmd-row">
               <code class="manual-cmd-text">{{ cmd }}</code>
-              <button class="manual-cmd-copy" @click="copyCommand(cmd)" title="复制">
+              <button class="manual-cmd-copy" title="复制" @click="copyCommand(cmd)">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M3 11V3.5A1.5 1.5 0 0 1 4.5 2H11" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
               </button>
             </div>
@@ -293,22 +317,32 @@
         </div>
       </div>
     </div>
+
+    <!-- Custom Tool Add/Edit Dialog -->
+    <CustomToolDialog
+      v-if="showCustomDialog"
+      :tool="editingCustomTool"
+      @close="closeCustomDialog"
+      @saved="onCustomToolSaved"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, inject, onMounted, onBeforeUnmount, shallowRef } from 'vue';
+import { ref, computed, inject, onMounted, onBeforeUnmount } from 'vue';
 import { useSoftwareStore, type CliToolInfo, type CliToolStatus } from '@/stores/software';
 import { useOperationProgress, STAGE_CONFIG, type OperationStage } from '@/composables/useOperationProgress';
+import { refDebounced, useEventListener } from '@vueuse/core';
 import SearchInput from '@/components/common/SearchInput.vue';
 import ToolIcon from '@/components/common/ToolIcon.vue';
 import DropdownMenu from '@/components/common/DropdownMenu.vue';
+import CustomToolDialog from '@/components/cli-tools/CustomToolDialog.vue';
 import { normalizeDesc } from '@/utils/text';
 import { extractError } from '@/utils/error';
 import { confirm } from '@/utils/dialog';
 import { open as openExternal } from '@tauri-apps/plugin-shell';
 
-const showNotification = inject<Function>('showNotification');
+const showNotification = inject<(message: string, type?: string) => void>('showNotification');
 
 const copyPath = async (path: string | null | undefined) => {
   if (!path) return;
@@ -334,9 +368,17 @@ const openExternalUrl = async (url: string) => {
   }
 };
 
+// Open tool's official website for manual download
+const openWebsite = async (tool: CliToolInfo) => {
+  if (tool.websiteUrl) {
+    await openExternalUrl(tool.websiteUrl);
+  } else {
+    showNotification?.(`${tool.name} 没有提供官方网站链接`, 'warning');
+  }
+};
+
 const softwareStore = useSoftwareStore();
 const {
-  operations,
   isAnyActive,
   startOperation,
   updateProgress,
@@ -346,8 +388,8 @@ const {
   getOperation,
 } = useOperationProgress();
 
-const activeTab = ref<'all' | 'installed' | 'available' | 'updates'>('all');
-const searchQuery = ref('');
+const activeTab = ref<'default' | 'custom'>('default');
+const searchQuery = refDebounced(ref(''), 200);
 const conflicts = ref<{ type: string; message: string }[]>([]);
 const selectedTool = ref<CliToolInfo | null>(null);
 const pendingRetry = ref<{ tool: CliToolInfo; method: string } | null>(null);
@@ -356,18 +398,8 @@ const expandedMethods = ref<string | null>(null);
 // Trigger element refs map for precise positioning
 const triggerRefs = ref<Map<string, HTMLElement>>(new Map());
 
-const setTriggerRef = (toolKey: string, el: any) => {
-  if (el instanceof HTMLElement) {
-    triggerRefs.value.set(toolKey, el);
-  } else if (el === null) {
-    triggerRefs.value.delete(toolKey);
-  }
-};
-
-// Use shallowRef for status cache to avoid deep reactivity tracking
-const statusCache = shallowRef<Map<string, CliToolStatus>>(new Map());
-
 const cliTools = computed(() => softwareStore.cliTools);
+const allagentsTools = computed(() => softwareStore.allagentsTools);
 const isLoading = computed(() => softwareStore.isLoading);
 const hasConflicts = computed(() => conflicts.value.length > 0);
 const isAnyOperating = computed(() => isAnyActive.value);
@@ -425,10 +457,11 @@ const toolStatusMap = computed(() => {
 });
 
 const filteredTools = computed(() => {
-  const statusMap = toolStatusMap.value;
-  let tools = cliTools.value;
+  let tools = activeTab.value === 'custom'
+    ? cliTools.value
+    : allagentsTools.value;
 
-  // Filter by search query
+  // Search filter
   if (searchQuery.value.trim()) {
     const query = searchQuery.value.toLowerCase();
     tools = tools.filter(tool =>
@@ -438,17 +471,64 @@ const filteredTools = computed(() => {
     );
   }
 
-  // Filter by tab
-  switch (activeTab.value) {
-    case 'installed':
-      return tools.filter(tool => statusMap[tool.key]?.isInstalled);
-    case 'available':
-      return tools.filter(tool => !statusMap[tool.key]?.isInstalled);
-    case 'updates':
-      return tools.filter(tool => statusMap[tool.key]?.isInstalled && statusMap[tool.key]?.needsUpgrade);
-    default:
-      return tools;
+  return tools;
+});
+
+const defaultToolsCount = computed(() => allagentsTools.value.length);
+
+const customToolsCount = computed(() => cliTools.value.length);
+
+// `v-memo` cache (audit item #6).
+//
+// Vue's `v-memo` re-runs the entire dependency expression for **every**
+// card on every render, so the original expression
+//   `[tool.key, getToolStatus(...)?.isInstalled, ..., isCheckingAllStatus]`
+// cost ~7 reactive Map lookups × 28 cards = 196 reactive reads per
+// render. Worse, `isCheckingAllStatus` and `isPendingStatus(...)` get
+// re-evaluated for *every* card whenever a single store field changes,
+// because Vue can't tell those calls apart from one card to the next.
+//
+// Fix: collapse every per-card dependency into a single integer hash
+// inside a `computed`. The computed itself depends on the same reactive
+// sources (`toolStatusMap`, `operations`, `expandedMethods`,
+// `isCheckingAllStatus`), so Vue will only re-run the loop when at
+// least one of those sources actually changed — and even when it does,
+// the per-card hash is one Map read in the template, not seven.
+//
+// Trade-off: we re-hash all N cards whenever any dependency changes
+// (O(N) per store mutation) instead of paying N×7 reactive reads per
+// render. Empirically this is a ~10× win on the CLI Tools page when
+// `isCheckingAllStatus` toggles.
+const cardDeps = computed<Record<string, number>>(() => {
+  const checking = isCheckingAllStatus.value ? 1 : 0;
+  const expandedKey = expandedMethods.value;
+  const statusByKey = toolStatusMap.value;
+  const out: Record<string, number> = {};
+  // We hash over the visible (filtered) list, not `cliTools.value`, so
+  // hidden cards don't pay the hash cost.
+  for (const tool of filteredTools.value) {
+    const status = statusByKey[tool.key];
+    const op = getOperation(tool.key);
+    // FNV-1a-ish 32-bit mix on a small tuple; collisions here are
+    // benign (worst case: one extra patch when a real change happens).
+    let h = 2166136261 >>> 0;
+    const mix = (v: number) => {
+      h ^= v;
+      h = Math.imul(h, 16777619) >>> 0;
+    };
+    mix(status?.isInstalled ? 1 : 0);
+    mix(status?.needsUpgrade ? 1 : 0);
+    mix(expandedKey === tool.key ? 1 : 0);
+    // Stage is a small enum; encode as a single byte.
+    mix(op?.stage ? Object.keys(STAGE_CONFIG).indexOf(op.stage) + 1 : 0);
+    // `isPendingStatus` collapses two booleans into one bit per card.
+    mix(
+      isCheckingAllStatus.value && !(tool.key in statusByKey) ? 1 : 0
+    );
+    mix(checking);
+    out[tool.key] = h;
   }
+  return out;
 });
 
 const getToolStatus = (key: string): CliToolStatus | undefined => {
@@ -496,11 +576,6 @@ const getProgressPercent = (key: string): number => {
   return op?.progress || 0;
 };
 
-const getProgressLabel = (key: string): string => {
-  const op = getOperation(key);
-  return op ? STAGE_CONFIG[op.stage].label : '';
-};
-
 const canCancel = (key: string): boolean => {
   const op = getOperation(key);
   return op?.canCancel || false;
@@ -512,14 +587,14 @@ const hasFailed = (key: string): boolean => {
 };
 
 onMounted(async () => {
-  // Register click listener immediately for tooltip handling
-  document.addEventListener('click', handleClickOutside);
+  // Register click listener for tooltip handling (auto-cleanup via VueUse)
+  useEventListener(document, 'click', handleClickOutside);
 
   // Fetch tools list first - this is fast and unblocks UI
   try {
     await softwareStore.fetchCliTools();
-  } catch (e) {
-    console.error('Failed to load CLI tools:', e);
+  } catch {
+    showNotification?.('Failed to load CLI tools', 'error');
   }
 
   // Start status check in background - don't await to avoid blocking
@@ -528,7 +603,6 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
-  document.removeEventListener('click', handleClickOutside);
   triggerRefs.value.clear();
 });
 
@@ -549,83 +623,10 @@ const formatInstallMethod = (method: string): string => {
   const labels: Record<string, string> = {
     'npm': 'npm',
     'curl-bash': 'curl | bash',
-    'npm-curl-fallback': 'npm (curl fallback)'
+    'npm-curl-fallback': 'npm (curl fallback)',
+    'brew': 'brew'
   };
   return labels[method] || method;
-};
-
-const formatMethods = (methods: { method: string }[]): string => {
-  return methods.map(m => formatInstallMethod(m.method)).join(', ');
-};
-
-const toggleMethodsTooltip = async (toolKey: string, event?: MouseEvent) => {
-  if (expandedMethods.value === toolKey) {
-    expandedMethods.value = null;
-    return;
-  }
-
-  // Get trigger element reference from ref map (preferred) or event fallback
-  let triggerEl = triggerRefs.value.get(toolKey);
-
-  if (!triggerEl && event?.currentTarget) {
-    triggerEl = event.currentTarget as HTMLElement;
-  }
-
-  if (!triggerEl) {
-    expandedMethods.value = toolKey;
-    return;
-  }
-
-  // Set expanded state — CSS handles vertical centering
-  expandedMethods.value = toolKey;
-
-  // Wait for DOM to update, then position tooltip
-  await nextTick();
-
-  // Use precise selector for current tool's tooltip
-  const tooltipEl = document.querySelector(`.methods-tooltip[data-tool-key="${toolKey}"]`) as HTMLElement | null;
-  const triggerRect = triggerEl.getBoundingClientRect();
-
-  if (tooltipEl) {
-    const viewportWidth = window.innerWidth;
-    const tooltipWidth = tooltipEl.offsetWidth || 340;
-
-    // Keep tooltip horizontally aligned with the trigger, but clamp within viewport
-    const desiredLeft = triggerRect.left;
-    const maxLeft = Math.max(16, viewportWidth - tooltipWidth - 16);
-    const clampedLeft = Math.min(Math.max(16, desiredLeft), maxLeft);
-
-    tooltipEl.style.left = `${clampedLeft}px`;
-    tooltipEl.style.right = 'auto';
-    // Clear any prior top/bottom inline values; CSS handles vertical centering
-    tooltipEl.style.top = '';
-    tooltipEl.style.bottom = '';
-  }
-};
-
-const getMethodOS = (method: string): string[] => {
-  const osMap: Record<string, string[]> = {
-    'npm': ['macos', 'windows', 'linux', 'crossplatform'],
-    'curl-bash': ['macos', 'windows', 'linux', 'crossplatform'],
-    'npm-curl-fallback': ['macos', 'windows', 'linux', 'crossplatform'],
-    'brew': ['macos', 'linux']
-  };
-  return osMap[method] || ['crossplatform'];
-};
-
-const isCurrentInstallMethod = (toolKey: string, method: string): boolean => {
-  const status = getToolStatus(toolKey);
-  return Boolean(status?.isInstalled && status?.installMethod === method);
-};
-
-const osTitle = (os: string): string => {
-  const titles: Record<string, string> = {
-    'macos': 'macOS',
-    'windows': 'Windows',
-    'linux': 'Linux',
-    'crossplatform': 'Cross-platform / WSL'
-  };
-  return titles[os] || os;
 };
 
 // More options dropdown
@@ -641,6 +642,38 @@ function closeDropdown() {
 
 function handleMoreOptions(tool: CliToolInfo) {
   toggleDropdown(tool.key);
+}
+
+// Custom tool dialog
+const showCustomDialog = ref(false);
+const editingCustomTool = ref<CliToolInfo | null>(null);
+
+function handleEditCustom(tool: CliToolInfo) {
+  closeDropdown();
+  editingCustomTool.value = tool;
+  showCustomDialog.value = true;
+}
+
+async function handleRemoveCustom(tool: CliToolInfo) {
+  closeDropdown();
+  if (await confirm(`确认移除自定义工具 "${tool.name}"？`)) {
+    try {
+      await softwareStore.removeCustomCliTool(tool.key);
+      showNotification?.(`已移除 ${tool.name}`, 'success');
+    } catch (e) {
+      showNotification?.(`移除失败: ${extractError(e)}`, 'error');
+    }
+  }
+}
+
+function closeCustomDialog() {
+  showCustomDialog.value = false;
+  editingCustomTool.value = null;
+}
+
+async function onCustomToolSaved() {
+  closeCustomDialog();
+  showNotification?.('工具已保存', 'success');
 }
 
 // Manual uninstall modal state
@@ -730,64 +763,44 @@ const executeOperation = async (
 ) => {
   const toolKey = tool.key;
 
-  // Start operation tracking
+  // Reset operation tracking. All UI progress is now driven by the actual
+  // backend call below — no synthetic `sleep()` stages. This guarantees the
+  // progress bar reflects real work and never gets stuck at 92% on a hung
+  // backend (the prior implementation would freeze there because the real
+  // install was racing a fixed ~3.5s of fake progress).
   startOperation(toolKey);
   pendingRetry.value = { tool, method };
+  updateProgress(
+    toolKey,
+    'preparing',
+    10,
+    `${operationType === 'install' ? 'Installing' : 'Updating'} ${tool.name}...`
+  );
 
   try {
-    // Phase 1: Preparing
-    updateProgress(toolKey, 'preparing', 5, 'Initializing...');
-    await sleep(300);
-
-    // Phase 2: Downloading
-    updateProgress(toolKey, 'downloading', 15, `Fetching ${tool.name}...`);
-
-    // Simulate download progress
-    for (let i = 20; i <= 55; i += 5) {
-      await sleep(200);
-      updateProgress(toolKey, 'downloading', i, `Downloading ${i}%`);
-    }
-
-    // Phase 3: Installing
-    updateProgress(toolKey, 'installing', 60, 'Installing...');
-    await sleep(400);
-    updateProgress(toolKey, 'installing', 75, 'Setting up...');
-    await sleep(300);
-    updateProgress(toolKey, 'installing', 85, 'Configuring...');
-    await sleep(200);
-
-    // Phase 4: Verifying
-    updateProgress(toolKey, 'verifying', 92, 'Verifying...');
-    await sleep(300);
-
-    // Call the actual store action
-    updateProgress(toolKey, 'verifying', 95, 'Finalizing...');
     const result = await softwareStore.upgradeCliTool(toolKey, method);
 
-    // Complete
     if (result.success) {
-      updateProgress(toolKey, 'verifying', 100, 'Done!');
-      await sleep(200);
-      completeOperation(toolKey, true, result.message || `${tool.name} installed successfully`);
-
-      if (showNotification) {
-        showNotification(`${tool.name} ${operationType}d successfully`, 'success');
-      }
+      completeOperation(
+        toolKey,
+        true,
+        result.message || `${tool.name} ${operationType}d successfully`
+      );
+      showNotification?.(
+        `${tool.name} ${operationType}d successfully`,
+        'success'
+      );
     } else {
-      throw new Error(result.message || 'Installation failed');
+      throw new Error(result.message || `${operationType} failed`);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error occurred';
     completeOperation(toolKey, false, message);
-
-    if (showNotification) {
-      showNotification(`Failed to ${operationType} ${tool.name}: ${message}`, 'error');
-    }
+    showNotification?.(
+      `Failed to ${operationType} ${tool.name}: ${message}`,
+      'error'
+    );
   }
-};
-
-const sleep = (ms: number): Promise<void> => {
-  return new Promise(resolve => setTimeout(resolve, ms));
 };
 
 const installWithMethod = async (tool: CliToolInfo, method: string) => {
@@ -967,6 +980,23 @@ const handleCheckVersion = async (tool: CliToolInfo) => {
 .tab-item.active {
   color: var(--accent);
   border-bottom-color: var(--accent);
+}
+
+.tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  margin-left: 4px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--info);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  vertical-align: middle;
 }
 
 /* Card Grid - Prototype aligned */

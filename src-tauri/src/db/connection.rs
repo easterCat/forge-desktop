@@ -1,27 +1,57 @@
 use rusqlite::{Connection, Result, params};
 use std::path::Path;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use crate::models::{Software, Plugin, Skill, McpService, Rule, BackupRecord, Agent};
 
 static GLOBAL_DB: OnceLock<Database> = OnceLock::new();
 
+/// Database handle. Multiple instances can share the same underlying
+/// `Connection` (via `Arc<Mutex<Connection>>`) — the global `KvStore`
+/// and the Tauri `AppState` both hold a clone of this struct, so all
+/// reads and writes serialise on the same lock instead of racing two
+/// separate connections against the same SQLite file.
+#[derive(Clone)]
 pub struct Database {
-    pub conn: Mutex<Connection>,
+    pub conn: Arc<Mutex<Connection>>,
 }
 
 impl Database {
     pub fn new(path: &Path) -> Result<Self> {
         let conn = Connection::open(path)?;
+        // Enable WAL mode + a 5s busy timeout. WAL allows readers to
+        // proceed without blocking the writer, which is essential now
+        // that the same `Connection` is shared between the global KV
+        // store and the Tauri `AppState`. The busy timeout prevents
+        // immediate `SQLITE_BUSY` errors under concurrent access.
+        // Errors here are non-fatal: the DB still works without WAL.
+        if let Err(e) = conn.pragma_update(None, "journal_mode", "WAL") {
+            log::warn!("Failed to enable WAL mode: {}", e);
+        }
+        if let Err(e) = conn.pragma_update(None, "synchronous", "NORMAL") {
+            log::warn!("Failed to set synchronous=NORMAL: {}", e);
+        }
+        if let Err(e) = conn.pragma_update(None, "busy_timeout", "5000") {
+            log::warn!("Failed to set busy_timeout: {}", e);
+        }
+        if let Err(e) = conn.pragma_update(None, "foreign_keys", "ON") {
+            log::warn!("Failed to enable foreign_keys: {}", e);
+        }
         let db = Database {
-            conn: Mutex::new(conn),
+            conn: Arc::new(Mutex::new(conn)),
         };
         db.init_tables()?;
         Ok(db)
     }
 
-    /// Set the global database instance (call once at app startup).
-    pub fn set_global(db: Database) {
-        let _ = GLOBAL_DB.set(db);
+    /// Set the global database instance (call once at app startup) and
+    /// return a *clone* that points at the same underlying connection.
+    /// The caller typically hands this clone to `AppState::manage`, so
+    /// both the global `KvStore` and the Tauri `AppState` share one
+    /// `Connection` — no more `SQLITE_BUSY` from two connections
+    /// competing on the same file.
+    pub fn set_global(db: Database) -> Database {
+        let _ = GLOBAL_DB.set(db.clone());
+        db
     }
 
     /// Get a reference to the global database, if initialized.
@@ -29,15 +59,76 @@ impl Database {
         GLOBAL_DB.get()
     }
 
+    /// Acquire the connection lock, recovering from a poisoned mutex.
+    /// All `Database` operations go through this helper so a panic in
+    /// one thread cannot permanently kill the application's ability to
+    /// talk to SQLite.
+    pub fn lock(&self) -> std::sync::MutexGuard<'_, Connection> {
+        match self.conn.lock() {
+            Ok(g) => g,
+            Err(poisoned) => {
+                log::warn!("Recovering from poisoned SQLite connection in Database::lock");
+                poisoned.into_inner()
+            }
+        }
+    }
+
+    /// Like `lock` but returns a `String` error instead of recovering
+    /// silently. Used by call sites that want to surface the failure to
+    /// the Tauri command's `Result<_, String>` channel.
+    pub fn lock_or_err(&self) -> Result<std::sync::MutexGuard<'_, Connection>, String> {
+        match self.conn.lock() {
+            Ok(g) => Ok(g),
+            Err(poisoned) => {
+                log::warn!("Recovering from poisoned SQLite connection in Database::lock_or_err");
+                Ok(poisoned.into_inner())
+            }
+        }
+    }
+
     fn init_tables(&self) -> Result<()> {
         self.init_tables_inner()?;
         // Run one-time JSON → KV migration (releases lock between table creation and migration)
         Self::migrate_json_to_kv(&self.conn);
+        // Seed builtin CLI tools into custom_cli_tools on first launch so the
+        // table starts populated (idempotent — uses INSERT OR REPLACE).
+        crate::services::cli_tools::seed_builtin_cli_tools_locked(&self.conn);
+        // Cleanup: remove deprecated tools every launch. Previously this lived
+        // inside `init_tables_inner` under `CREATE TABLE IF NOT EXISTS`, so it
+        // only ran on first-ever DB creation. For existing users who already
+        // had a stale `github-cli` row, it never executed. Moving it here
+        // guarantees cleanup even for pre-existing databases.
+        self.cleanup_deprecated_custom_cli_tools()?;
+        Ok(())
+    }
+
+    /// Delete explicitly deprecated custom CLI tool entries.
+    /// Called on every startup to ensure stale rows don't resurface.
+    fn cleanup_deprecated_custom_cli_tools(&self) -> Result<()> {
+        let conn = self.lock();
+        let deprecated_keys = [
+            // AI CLI tools
+            "codex-cli", "aider", "goose", "kilo-code", "kimi-cli",
+            // Dev tools — `gh` (GitHub CLI) was historically seeded but is not
+            // a supported tool. We also keep `"github-cli"` for completeness in
+            // case an even older row used that key.
+            "github-cli", "gh", "lazygit",
+            // Modern CLI replacements
+            "eza", "ripgrep", "bat", "fzf", "zoxide", "btop",
+            // Network/utility
+            "httpie", "starship",
+        ];
+        let list = deprecated_keys.iter().map(|s| format!("'{}'", s)).collect::<Vec<_>>().join(",");
+        conn.execute(
+            &format!("DELETE FROM custom_cli_tools WHERE key IN ({})", list),
+            [],
+        )?;
+        log::info!("Cleanup: removed deprecated custom CLI tools");
         Ok(())
     }
 
     fn init_tables_inner(&self) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         
         conn.execute(
             "CREATE TABLE IF NOT EXISTS software (
@@ -215,6 +306,85 @@ impl Database {
             [],
         )?;
 
+        // Custom CLI tools table (user-defined)
+        // is_allagents: 1 = allagents 23 tools (Default tab), 0 = custom tools (Custom tab)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS custom_cli_tools (
+                key TEXT PRIMARY KEY,
+                is_allagents INTEGER NOT NULL DEFAULT 0,
+                name TEXT NOT NULL,
+                icon TEXT NOT NULL DEFAULT '',
+                description TEXT NOT NULL DEFAULT '',
+                install_method TEXT NOT NULL,
+                install_command TEXT NOT NULL,
+                detect_command TEXT NOT NULL,
+                website_url TEXT,
+                plugin_dir TEXT,
+                install_timeout_secs INTEGER NOT NULL DEFAULT 300,
+                npm_package TEXT,
+                created_at TEXT NOT NULL
+            )",
+            [],
+        )?;
+
+        // Migration: add 'is_allagents' column if it doesn't exist (for existing databases)
+        let has_is_allagents_column: bool = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('custom_cli_tools') WHERE name = 'is_allagents'",
+                [],
+                |row| row.get::<_, i32>(0),
+            )
+            .unwrap_or(0) > 0;
+
+        if !has_is_allagents_column {
+            // Add is_allagents column with default value 0 (custom)
+            conn.execute(
+                "ALTER TABLE custom_cli_tools ADD COLUMN is_allagents INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
+            log::info!("Migration: added 'is_allagents' column to custom_cli_tools");
+        }
+
+        // Migration: mark all allagents 23 tools as is_allagents=1
+        // These are the standard allagents tools (copilot, codex, opencode, etc.)
+        let allagents_keys = [
+            "copilot", "codex", "opencode", "gemini", "ampcode", "replit", "kimi", "vscode",
+            "claude", "cursor", "factory", "openclaw", "windsurf", "cline", "continue",
+            "roo", "kilo", "trae", "augment", "zencoder", "junie", "openhands", "kiro",
+        ];
+        let allagents_list = allagents_keys.iter().map(|s| format!("'{}'", s)).collect::<Vec<_>>().join(",");
+        conn.execute(
+            &format!("UPDATE custom_cli_tools SET is_allagents = 1 WHERE key IN ({})", allagents_list),
+            [],
+        )?;
+        log::info!("Migration: marked allagents tools as is_allagents=1");
+
+        // Migration: remove duplicate legacy tools from custom_cli_tools
+        // These are deprecated - their allagents equivalents replaced them
+        // Note: mimo is NOT removed here since we now have it as a valid custom tool.
+        // `mimo-code` is the historical alias for the `mimo` seed and is removed
+        // so it doesn't appear as a duplicate of MiMo Code in the Custom tab.
+        // `hermes` is removed from this list because hermes now has its own
+        // SeedEntry in cli_tools.rs; previously the seed list dropped it
+        // which left stale rows stranded in the DB.
+        let legacy_keys = [
+            "claude-code", "gemini-cli", "deepseek-reasonix", "qwen-code",
+            "mimo-code",
+        ];
+        let legacy_list = legacy_keys.iter().map(|s| format!("'{}'", s)).collect::<Vec<_>>().join(",");
+        conn.execute(
+            &format!("DELETE FROM custom_cli_tools WHERE key IN ({})", legacy_list),
+            [],
+        )?;
+        log::info!("Migration: removed duplicate legacy tools from custom_cli_tools");
+
+        // NOTE: The per-startup deprecated-tools cleanup (including github-cli removal)
+        // lives in `cleanup_deprecated_custom_cli_tools()` called from `init_tables()`
+        // on every app launch. The code below only runs on first-ever DB creation
+        // (it is inside `CREATE TABLE IF NOT EXISTS`), so it is kept here as a
+        // belt-and-suspenders measure but the authoritative cleanup is in the
+        // dedicated function above.
+
         conn.execute(
             "CREATE TABLE IF NOT EXISTS backups (
                 id TEXT PRIMARY KEY,
@@ -268,7 +438,7 @@ impl Database {
 
     // Software CRUD operations
     pub fn get_all_software(&self) -> Result<Vec<Software>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         let mut stmt = conn.prepare(
             "SELECT id, name, key, version, install_path, config_path, is_installed, last_checked, website_url, platform FROM software"
         )?;
@@ -299,7 +469,7 @@ impl Database {
     }
 
     pub fn get_software_by_key(&self, key: &str) -> Result<Option<Software>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         let mut stmt = conn.prepare(
             "SELECT id, name, key, version, install_path, config_path, is_installed, last_checked, website_url, platform FROM software WHERE key = ?"
         )?;
@@ -328,7 +498,7 @@ impl Database {
     }
 
     pub fn upsert_software(&self, software: &Software) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         conn.execute(
             "INSERT OR REPLACE INTO software (id, name, key, version, install_path, config_path, is_installed, last_checked, website_url, platform)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
@@ -350,7 +520,7 @@ impl Database {
 
     // Plugin CRUD operations
     pub fn get_plugins_by_software(&self, software_id: &str) -> Result<Vec<Plugin>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         let mut stmt = conn.prepare(
             "SELECT id, software_id, name, version, author, description, installed_path, enabled, installed_at, last_updated FROM plugins WHERE software_id = ?"
         )?;
@@ -378,7 +548,7 @@ impl Database {
     }
 
     pub fn get_all_plugins(&self) -> Result<Vec<Plugin>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         let mut stmt = conn.prepare(
             "SELECT id, software_id, name, version, author, description, installed_path, enabled, installed_at, last_updated FROM plugins"
         )?;
@@ -406,7 +576,7 @@ impl Database {
     }
 
     pub fn upsert_plugin(&self, plugin: &Plugin) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         conn.execute(
             "INSERT OR REPLACE INTO plugins (id, software_id, name, version, author, description, installed_path, enabled, installed_at, last_updated)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
@@ -427,14 +597,14 @@ impl Database {
     }
 
     pub fn delete_plugin(&self, plugin_id: &str) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         conn.execute("DELETE FROM plugins WHERE id = ?", params![plugin_id])?;
         Ok(())
     }
 
     // Skill CRUD operations
     pub fn get_skills_by_software(&self, software_id: &str) -> Result<Vec<Skill>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         let mut stmt = conn.prepare(
             "SELECT id, software_id, name, type, config, file_path, installed_at FROM skills WHERE software_id = ?"
         )?;
@@ -459,7 +629,7 @@ impl Database {
     }
 
     pub fn get_all_skills(&self) -> Result<Vec<Skill>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         let mut stmt = conn.prepare(
             "SELECT id, software_id, name, type, config, file_path, installed_at FROM skills"
         )?;
@@ -484,7 +654,7 @@ impl Database {
     }
 
     pub fn upsert_skill(&self, skill: &Skill) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         conn.execute(
             "INSERT OR REPLACE INTO skills (id, software_id, name, type, config, file_path, installed_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -502,14 +672,14 @@ impl Database {
     }
 
     pub fn delete_skill(&self, skill_id: &str) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         conn.execute("DELETE FROM skills WHERE id = ?", params![skill_id])?;
         Ok(())
     }
 
     // MCP Service CRUD operations
     pub fn get_mcp_services_by_software(&self, software_id: &str) -> Result<Vec<McpService>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         let mut stmt = conn.prepare(
             "SELECT id, software_id, name, endpoint, auth_type, config, is_healthy, last_checked FROM mcp_services WHERE software_id = ?"
         )?;
@@ -535,7 +705,7 @@ impl Database {
     }
 
     pub fn get_all_mcp_services(&self) -> Result<Vec<McpService>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         let mut stmt = conn.prepare(
             "SELECT id, software_id, name, endpoint, auth_type, config, is_healthy, last_checked FROM mcp_services"
         )?;
@@ -561,7 +731,7 @@ impl Database {
     }
 
     pub fn upsert_mcp_service(&self, service: &McpService) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         conn.execute(
             "INSERT OR REPLACE INTO mcp_services (id, software_id, name, endpoint, auth_type, config, is_healthy, last_checked)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
@@ -580,14 +750,14 @@ impl Database {
     }
 
     pub fn delete_mcp_service(&self, service_id: &str) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         conn.execute("DELETE FROM mcp_services WHERE id = ?", params![service_id])?;
         Ok(())
     }
 
     // Rule CRUD operations
     pub fn get_rules_by_software(&self, software_id: &str) -> Result<Vec<Rule>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         let mut stmt = conn.prepare(
             "SELECT id, software_id, name, type, file_path, content, is_active, created_at, updated_at FROM rules WHERE software_id = ?"
         )?;
@@ -614,7 +784,7 @@ impl Database {
     }
 
     pub fn get_all_rules(&self) -> Result<Vec<Rule>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         let mut stmt = conn.prepare(
             "SELECT id, software_id, name, type, file_path, content, is_active, created_at, updated_at FROM rules"
         )?;
@@ -641,7 +811,7 @@ impl Database {
     }
 
     pub fn upsert_rule(&self, rule: &Rule) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         conn.execute(
             "INSERT OR REPLACE INTO rules (id, software_id, name, type, file_path, content, is_active, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
@@ -661,14 +831,14 @@ impl Database {
     }
 
     pub fn delete_rule(&self, rule_id: &str) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         conn.execute("DELETE FROM rules WHERE id = ?", params![rule_id])?;
         Ok(())
     }
 
     // Backup CRUD operations
     pub fn get_all_backup_records(&self) -> Result<Vec<BackupRecord>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         let mut stmt = conn.prepare(
             "SELECT id, name, path, size, file_count, created_at, includes FROM backups"
         )?;
@@ -693,7 +863,7 @@ impl Database {
     }
 
     pub fn upsert_backup_record(&self, backup: &BackupRecord) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         conn.execute(
             "INSERT OR REPLACE INTO backups (id, name, path, size, file_count, created_at, includes)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -711,14 +881,14 @@ impl Database {
     }
 
     pub fn delete_backup_record(&self, backup_id: &str) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         conn.execute("DELETE FROM backups WHERE id = ?", params![backup_id])?;
         Ok(())
     }
 
     // Agent CRUD operations
     pub fn get_all_agents(&self) -> Result<Vec<Agent>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         let mut stmt = conn.prepare(
             "SELECT id, name, description, emoji, color, department, content, source, tags, installed_targets, is_custom, created_at, updated_at FROM agents"
         )?;
@@ -749,7 +919,7 @@ impl Database {
     }
 
     pub fn get_agents_by_department(&self, dept: &str) -> Result<Vec<Agent>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         let mut stmt = conn.prepare(
             "SELECT id, name, description, emoji, color, department, content, source, tags, installed_targets, is_custom, created_at, updated_at FROM agents WHERE department = ?"
         )?;
@@ -780,7 +950,7 @@ impl Database {
     }
 
     pub fn search_agents(&self, query: &str) -> Result<Vec<Agent>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         let pattern = format!("%{}%", query);
         let mut stmt = conn.prepare(
             "SELECT id, name, description, emoji, color, department, content, source, tags, installed_targets, is_custom, created_at, updated_at FROM agents WHERE name LIKE ?1 OR description LIKE ?1 OR tags LIKE ?1"
@@ -812,7 +982,7 @@ impl Database {
     }
 
     pub fn upsert_agent(&self, agent: &Agent) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         conn.execute(
             "INSERT OR REPLACE INTO agents (id, name, description, emoji, color, department, content, source, tags, installed_targets, is_custom, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
@@ -836,7 +1006,7 @@ impl Database {
     }
 
     pub fn delete_agent(&self, agent_id: &str) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         conn.execute("DELETE FROM agents WHERE id = ?", params![agent_id])?;
         Ok(())
     }
@@ -846,11 +1016,11 @@ impl Database {
     /// Each file is checked independently — if it exists and parses, its
     /// content is written to KV and the original is renamed to `.json.bak`.
     /// Failures for one file do not block the others.
-    fn migrate_json_to_kv(conn: &std::sync::Mutex<rusqlite::Connection>) {
+    fn migrate_json_to_kv(conn: &std::sync::Arc<std::sync::Mutex<rusqlite::Connection>>) {
         use crate::db::kv_store::KvStore;
         use crate::services::plugin_marketplace::forge_home;
 
-        let kv = KvStore::new(conn);
+        let kv = KvStore::new(conn.clone());
         let home = forge_home();
 
         let data_local = dirs::data_local_dir()

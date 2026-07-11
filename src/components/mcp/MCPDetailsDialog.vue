@@ -5,7 +5,7 @@
       <!-- Header -->
       <div class="dialog-header">
         <h3>MCP Server Details</h3>
-        <button class="close-btn" @click="$emit('close')" aria-label="关闭">
+        <button class="close-btn" aria-label="关闭" @click="$emit('close')">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/>
             <line x1="6" y1="6" x2="18" y2="18"/>
@@ -273,7 +273,7 @@
                 </svg>
                 Available Tools
               </h4>
-              <button class="btn btn-sm btn-secondary" @click="discoverService" :disabled="isDiscovering">
+              <button class="btn btn-sm btn-secondary" :disabled="isDiscovering" @click="discoverService">
                 <svg v-if="isDiscovering" class="spinner" width="14" height="14" viewBox="0 0 24 24">
                   <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4"/>
                 </svg>
@@ -355,7 +355,7 @@
           <div class="section">
             <div class="section-header">
               <h4>Health Check History</h4>
-              <button class="btn btn-sm btn-secondary" @click="loadHealthHistory" :disabled="isLoadingHealth">
+              <button class="btn btn-sm btn-secondary" :disabled="isLoadingHealth" @click="loadHealthHistory">
                 <svg v-if="isLoadingHealth" class="spinner" width="14" height="14" viewBox="0 0 24 24">
                   <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4"/>
                 </svg>
@@ -399,7 +399,7 @@
           <div class="section">
             <div class="section-header">
               <h4>Recent Activity</h4>
-              <button class="btn btn-sm btn-secondary" @click="loadActivity" :disabled="isLoadingActivity">
+              <button class="btn btn-sm btn-secondary" :disabled="isLoadingActivity" @click="loadActivity">
                 <svg v-if="isLoadingActivity" class="spinner" width="14" height="14" viewBox="0 0 24 24">
                   <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4"/>
                 </svg>
@@ -437,7 +437,7 @@
                 <div class="activity-content">
                   <div class="activity-header">
                     <span class="activity-action">{{ formatAction(entry.action) }}</span>
-                    <span class="activity-actor" v-if="entry.actor">by {{ entry.actor }}</span>
+                    <span v-if="entry.actor" class="activity-actor">by {{ entry.actor }}</span>
                   </div>
                   <span class="activity-time">{{ formatTimestamp(entry.createdAt) }}</span>
                 </div>
@@ -503,11 +503,18 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import MCPHealthBadge from './MCPHealthBadge.vue';
-import type { MCPServer, MCPService, MCPTool, MCPHealthRecord, MCPAuditEntry, MCPDiscoveryCache } from '@/types';
+import type {
+  MCPService,
+  MCPTool,
+  MCPHealthRecord,
+  MCPAuditEntry,
+  MCPDiscoveryCache,
+  MCPServerUnion,
+} from '@/types';
 import { open as openExternal } from '@tauri-apps/plugin-shell';
 
 interface Props {
-  server: MCPServer | MCPService;
+  server: MCPServerUnion;
   isInstalled: boolean;
 }
 
@@ -515,8 +522,8 @@ const props = defineProps<Props>();
 
 const emit = defineEmits<{
   (e: 'close'): void;
-  (e: 'install', server: MCPServer | MCPService): void;
-  (e: 'sync', server: MCPServer | MCPService): void;
+  (e: 'install', server: MCPServerUnion): void;
+  (e: 'sync', server: MCPServerUnion): void;
   (e: 'invoke-tool', service: MCPService, tool: MCPTool): void;
   (e: 'discover', serviceId: string): void;
 }>();
@@ -528,7 +535,9 @@ const hasHealthStatus = computed(() => {
 
 const healthStatus = computed<'online' | 'offline' | 'error'>(() => {
   if (!hasHealthStatus.value) return 'offline';
-  const service = props.server as MCPService;
+  // `hasHealthStatus` proves `isHealthy` is present; cast via `unknown` so
+  // the TS conversion guard accepts the downcast on `MCPServerUnion`.
+  const service = props.server as unknown as MCPService;
   return service.isHealthy ? 'online' : 'offline';
 });
 
@@ -536,7 +545,7 @@ const healthStatus = computed<'online' | 'offline' | 'error'>(() => {
 type TabId = 'overview' | 'discovery' | 'health' | 'activity';
 const activeTab = ref<TabId>('overview');
 
-const tabs = [
+const tabs: Array<{ id: TabId; label: string; icon: string }> = [
   { id: 'overview', label: 'Overview', icon: 'span' },
   { id: 'discovery', label: 'Discovery', icon: 'span' },
   { id: 'health', label: 'Health', icon: 'span' },
@@ -557,7 +566,7 @@ const isLoadingActivity = ref(false);
 
 onMounted(async () => {
   if (hasHealthStatus.value) {
-    const service = props.server as MCPService;
+    const service = props.server as unknown as MCPService;
     if (service.discoveryCache) {
       discoveryCache.value = service.discoveryCache;
     }
@@ -582,7 +591,7 @@ async function openExternalUrl(url: string) {
 async function discoverService() {
   if (!hasHealthStatus.value) return;
   isDiscovering.value = true;
-  emit('discover', (props.server as MCPService).id);
+  emit('discover', (props.server as unknown as MCPService).id);
   // Reset after timeout (actual result comes from parent)
   setTimeout(() => {
     isDiscovering.value = false;
@@ -608,7 +617,7 @@ async function loadActivity() {
 
 function openInvocationDialog(tool: MCPTool) {
   if (hasHealthStatus.value) {
-    emit('invoke-tool', props.server as MCPService, tool);
+    emit('invoke-tool', props.server as unknown as MCPService, tool);
   }
 }
 
@@ -1181,7 +1190,7 @@ function handleSync() {
 }
 
 .tool-name {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
   color: var(--accent);
 }

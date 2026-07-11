@@ -6,6 +6,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { resolvePluginVersion } from '@/utils/plugin-version';
+import { sortMarketplaceSources } from '@/utils/plugin-source-sort';
 import type {
   PluginSource,
   MarketplacePlugin,
@@ -18,16 +19,15 @@ import type {
   PluginSyncProgress,
   PluginSyncResult,
   RepoType,
+  MarketplaceManifest,
+  ManifestSource,
+  ManifestPlugin,
+  RemovedEntry,
+  CliToolMeta,
 } from '@/types';
 import { PRESET_MARKETPLACE_SOURCES } from '@/types';
 
-export interface MarketplaceManifest {
-  version: string;
-  lastSyncAt: string | null;
-  sources: Record<string, unknown>;
-  plugins: Record<string, unknown[]>;
-  removed: unknown[];
-}
+export type { MarketplaceManifest, ManifestSource, ManifestPlugin, RemovedEntry };
 
 export const usePluginMarketplaceStore = defineStore('pluginMarketplace', () => {
   // State
@@ -88,20 +88,11 @@ export const usePluginMarketplaceStore = defineStore('pluginMarketplace', () => 
   // source tabs and the Sources install grid. Ties (or sources with no
   // count yet) fall back to the original list order to keep things
   // stable across renders.
-  const sortedSources = computed(() => {
-    const presetIds = new Set(PRESET_MARKETPLACE_SOURCES.map(s => s.id));
-    const indexed = sources.value.map((s, i) => ({ s, i }));
-    indexed.sort((a, b) => {
-      // Preset sources always come first
-      const aPreset = presetIds.has(a.s.id) ? 0 : 1;
-      const bPreset = presetIds.has(b.s.id) ? 0 : 1;
-      if (aPreset !== bPreset) return aPreset - bPreset;
-      // Within the same tier, sort by pluginCount descending
-      const diff = (b.s.pluginCount ?? 0) - (a.s.pluginCount ?? 0);
-      return diff !== 0 ? diff : a.i - b.i;
-    });
-    return indexed.map(x => x.s);
-  });
+  // Sort with the same two-criteria rule (preset-first, then
+  // pluginCount desc) that `loadMarketplaceManifest` uses. The pure
+  // helper `sortMarketplaceSources` keeps both call sites in sync and
+  // is covered by `utils/__tests__/plugin-source-sort.spec.ts`.
+  const sortedSources = computed(() => sortMarketplaceSources(sources.value));
 
   const getPluginStatus = (plugin: MarketplacePlugin): 'installed' | 'update-available' | 'not-installed' => {
     const key = `${plugin.sourceId}::${plugin.name}`;
@@ -139,14 +130,7 @@ export const usePluginMarketplaceStore = defineStore('pluginMarketplace', () => 
       // source-tabs are rendered in) so the visually-first tab is the
       // one that's active by default.
       if (!currentSource.value && merged.length > 0) {
-        const presetIds = new Set(PRESET_MARKETPLACE_SOURCES.map(s => s.id));
-        const ordered = [...merged].sort((a, b) => {
-          const aPreset = presetIds.has(a.id) ? 0 : 1;
-          const bPreset = presetIds.has(b.id) ? 0 : 1;
-          if (aPreset !== bPreset) return aPreset - bPreset;
-          const diff = (b.pluginCount ?? 0) - (a.pluginCount ?? 0);
-          return diff !== 0 ? diff : merged.indexOf(a) - merged.indexOf(b);
-        });
+        const ordered = sortMarketplaceSources(merged);
         const installedFirst = ordered.find(
           (s) => sourceStatus.value[s.id]?.isInstalled,
         );
@@ -360,19 +344,20 @@ export const usePluginMarketplaceStore = defineStore('pluginMarketplace', () => 
       message: '正在安装插件...',
       startedAt: new Date().toISOString(),
     };
-    installProgress.value.set(plugin.id, progress);
+    // Reassign the Map reference so Vue's reactivity picks up the new
+    // entry — `Map.set()` alone does NOT trigger updates on a ref'd Map.
+    installProgress.value = new Map(installProgress.value).set(plugin.id, progress);
     isInstalling.value = true;
 
     try {
       progress.progress = 30;
       progress.message = '正在准备插件文件...';
-      installProgress.value.set(plugin.id, { ...progress });
+      installProgress.value = new Map(installProgress.value).set(plugin.id, { ...progress });
 
       const installResult = await invoke<{ success: boolean; path?: string; error?: string }>(
         'install_marketplace_plugin',
         {
           plugin,
-          sourceCommand: source.command,
         }
       );
 
@@ -384,7 +369,7 @@ export const usePluginMarketplaceStore = defineStore('pluginMarketplace', () => 
       progress.stage = 'success';
       progress.message = `插件已安装到 ${installResult.path}`;
       progress.completedAt = new Date().toISOString();
-      installProgress.value.set(plugin.id, { ...progress });
+      installProgress.value = new Map(installProgress.value).set(plugin.id, { ...progress });
 
       // Refresh installed plugins
       await fetchInstalledPlugins();
@@ -399,14 +384,16 @@ export const usePluginMarketplaceStore = defineStore('pluginMarketplace', () => 
       progress.stage = 'failed';
       progress.error = e instanceof Error ? e.message : String(e);
       progress.message = `安装失败: ${progress.error}`;
-      installProgress.value.set(plugin.id, { ...progress });
+      installProgress.value = new Map(installProgress.value).set(plugin.id, { ...progress });
 
       return { success: false, error: e };
     } finally {
       isInstalling.value = false;
 
       setTimeout(() => {
-        installProgress.value.delete(plugin.id);
+        const next = new Map(installProgress.value);
+        next.delete(plugin.id);
+        installProgress.value = next;
       }, 5000);
     }
   }
@@ -420,13 +407,13 @@ export const usePluginMarketplaceStore = defineStore('pluginMarketplace', () => 
       message: '正在卸载插件...',
       startedAt: new Date().toISOString(),
     };
-    installProgress.value.set(plugin.id, progress);
+    installProgress.value = new Map(installProgress.value).set(plugin.id, progress);
     isUninstalling.value = true;
 
     try {
       progress.progress = 50;
       progress.message = '正在移除插件文件...';
-      installProgress.value.set(plugin.id, { ...progress });
+      installProgress.value = new Map(installProgress.value).set(plugin.id, { ...progress });
 
       const uninstallResult = await invoke<{ success: boolean; error?: string }>(
         'uninstall_marketplace_plugin',
@@ -441,7 +428,7 @@ export const usePluginMarketplaceStore = defineStore('pluginMarketplace', () => 
       progress.stage = 'success';
       progress.message = '插件已卸载';
       progress.completedAt = new Date().toISOString();
-      installProgress.value.set(plugin.id, { ...progress });
+      installProgress.value = new Map(installProgress.value).set(plugin.id, { ...progress });
 
       // Refresh installed plugins
       await fetchInstalledPlugins();
@@ -457,14 +444,16 @@ export const usePluginMarketplaceStore = defineStore('pluginMarketplace', () => 
       progress.stage = 'failed';
       progress.error = e instanceof Error ? e.message : String(e);
       progress.message = `卸载失败: ${progress.error}`;
-      installProgress.value.set(plugin.id, { ...progress });
+      installProgress.value = new Map(installProgress.value).set(plugin.id, { ...progress });
 
       return { success: false, error: e };
     } finally {
       isUninstalling.value = false;
 
       setTimeout(() => {
-        installProgress.value.delete(plugin.id);
+        const next = new Map(installProgress.value);
+        next.delete(plugin.id);
+        installProgress.value = next;
       }, 5000);
     }
   }
@@ -485,19 +474,18 @@ export const usePluginMarketplaceStore = defineStore('pluginMarketplace', () => 
       message: '正在更新插件...',
       startedAt: new Date().toISOString(),
     };
-    installProgress.value.set(plugin.id, progress);
+    installProgress.value = new Map(installProgress.value).set(plugin.id, progress);
     isUpdating.value = true;
 
     try {
       progress.progress = 30;
       progress.message = '正在下载新版本插件...';
-      installProgress.value.set(plugin.id, { ...progress });
+      installProgress.value = new Map(installProgress.value).set(plugin.id, { ...progress });
 
       const updateResult = await invoke<{ success: boolean; newVersion?: string; error?: string }>(
         'update_marketplace_plugin',
         {
           plugin,
-          sourceCommand: source.command,
         }
       );
 
@@ -509,7 +497,7 @@ export const usePluginMarketplaceStore = defineStore('pluginMarketplace', () => 
       progress.stage = 'success';
       progress.message = `插件已更新到 ${updateResult.newVersion}`;
       progress.completedAt = new Date().toISOString();
-      installProgress.value.set(plugin.id, { ...progress });
+      installProgress.value = new Map(installProgress.value).set(plugin.id, { ...progress });
 
       await fetchInstalledPlugins();
 
@@ -523,14 +511,16 @@ export const usePluginMarketplaceStore = defineStore('pluginMarketplace', () => 
       progress.stage = 'failed';
       progress.error = e instanceof Error ? e.message : String(e);
       progress.message = `更新失败: ${progress.error}`;
-      installProgress.value.set(plugin.id, { ...progress });
+      installProgress.value = new Map(installProgress.value).set(plugin.id, { ...progress });
 
       return { success: false, error: e };
     } finally {
       isUpdating.value = false;
 
       setTimeout(() => {
-        installProgress.value.delete(plugin.id);
+        const next = new Map(installProgress.value);
+        next.delete(plugin.id);
+        installProgress.value = next;
       }, 5000);
     }
   }
@@ -555,7 +545,11 @@ export const usePluginMarketplaceStore = defineStore('pluginMarketplace', () => 
         sourceId: plugin.sourceId,
         pluginName: plugin.name,
       });
-      capabilitiesCache.value.set(key, caps);
+      // Reassign the Map reference so Vue's reactivity picks up the new
+      // entry — `Map.set()` on a ref'd Map does NOT trigger updates.
+      const next = new Map(capabilitiesCache.value);
+      next.set(key, caps);
+      capabilitiesCache.value = next;
       return caps;
     } catch (e) {
       console.error('Failed to fetch plugin capabilities:', e);
@@ -565,16 +559,18 @@ export const usePluginMarketplaceStore = defineStore('pluginMarketplace', () => 
 
   /// Clear the capabilities cache entry for a plugin.
   function clearCapabilitiesCache(pluginName: string, sourceId?: string) {
+    const next = new Map(capabilitiesCache.value);
     if (sourceId) {
-      capabilitiesCache.value.delete(`${sourceId}/${pluginName}`);
+      next.delete(`${sourceId}/${pluginName}`);
     } else {
       // Clear all entries matching the plugin name
-      for (const key of capabilitiesCache.value.keys()) {
+      for (const key of [...next.keys()]) {
         if (key.endsWith(`/${pluginName}`)) {
-          capabilitiesCache.value.delete(key);
+          next.delete(key);
         }
       }
     }
+    capabilitiesCache.value = next;
   }
 
   /// Toggle the user-controlled enable/disable flag for an installed plugin.
@@ -943,6 +939,57 @@ export const usePluginMarketplaceStore = defineStore('pluginMarketplace', () => 
   const syncStatuses = ref<Record<string, PluginSyncStatus>>({});
   // Sync progress: keyed by plugin_id
   const syncProgress = ref<Record<string, PluginSyncProgress>>({});
+  // All supported CLI tools from CliToolManager (populated once per session)
+  const supportedCliTools = ref<CliToolMeta[]>([]);
+
+  /** Color palette for known CLI tool keys. */
+  const CLI_TOOL_COLORS: Record<string, string> = {
+    'claude-code': '#B8944A',
+    'codex': '#059669',
+    'gemini-cli': '#2563EB',
+    'opencode': '#0891B2',
+    'openclaw': '#7C3AED',
+    'hermes': '#DC2626',
+    'cursor': '#7C3AED',
+    'deepseek-reasonix': '#4F46E5',
+    'mimo-code': '#0891B2',
+    'qwen-code': '#2563EB',
+    'copilot': '#6E40C9',
+  };
+
+  /** Fallback color for unknown tool keys (hash-based). */
+  function getCliToolColor(key: string): string {
+    if (CLI_TOOL_COLORS[key]) return CLI_TOOL_COLORS[key];
+    // Generate a consistent color from the key string
+    let hash = 0;
+    for (let i = 0; i < key.length; i++) {
+      hash = key.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const hue = Math.abs(hash) % 360;
+    return `hsl(${hue}, 55%, 45%)`;
+  }
+
+  /// Fetch all supported CLI tools from the backend (once per session).
+  async function fetchSupportedCliTools(): Promise<void> {
+    if (supportedCliTools.value.length > 0) return;
+    try {
+      const list = await invoke<Array<{
+        key: string;
+        name: string;
+        icon: string;
+        pluginDir: string | null;
+      }>>('get_supported_cli_tools');
+      supportedCliTools.value = list.map(t => ({
+        key: t.key,
+        name: t.name,
+        icon: t.icon.substring(0, 2).toUpperCase(),
+        color: getCliToolColor(t.key),
+        pluginDir: t.pluginDir,
+      }));
+    } catch (e) {
+      console.error('Failed to fetch supported CLI tools:', e);
+    }
+  }
 
   /// Fetch sync statuses for a batch of plugins.
   async function fetchSyncStatuses(pluginIds: string[]): Promise<void> {
@@ -1168,6 +1215,7 @@ export const usePluginMarketplaceStore = defineStore('pluginMarketplace', () => 
     // Plugin sync state
     syncStatuses,
     syncProgress,
+    supportedCliTools,
     // Resolved version cache
     resolvedVersions,
 
@@ -1213,6 +1261,7 @@ export const usePluginMarketplaceStore = defineStore('pluginMarketplace', () => 
     switchSourceType,
     // Plugin sync actions
     fetchSyncStatuses,
+    fetchSupportedCliTools,
     syncPluginToCliTool,
     unsyncPluginFromCliTool,
     getSyncProgress,

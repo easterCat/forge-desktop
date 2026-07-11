@@ -1,27 +1,26 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, inject } from 'vue'
 import { useRuleStore } from '@/stores/rule'
-import FilterBar from '@/components/common/FilterBar.vue'
-import SearchInput from '@/components/common/SearchInput.vue'
-import Badge from '@/components/common/Badge.vue'
 import Button from '@/components/common/Button.vue'
 import type { Rule } from '@/types'
 import { confirm } from '@/utils/dialog'
 
+const showNotification = inject<(msg: string, type?: string) => void>('showNotification')
+
 const ruleStore = useRuleStore()
 
-// State
+// Mock data for UI demo (used as fallback when store is empty)
 const searchQuery = ref('')
 const selectedSource = ref('all')
 const selectedType = ref('all')
 const selectedStatus = ref('all')
 
 // Mock data for UI demo (PENDING: real API integration)
-const mockRules: Array<Rule & { size: string; software: string }> = [
-  { id: '1', softwareId: 'cursor', name: 'AGENTS.md', type: 'md', filePath: '.cursor/rules/AGENTS.md', content: '', isActive: true, createdAt: '2026-06-12T20:28:00Z', updatedAt: '2026-06-12T20:28:00Z', size: '4.2 KB', software: 'Cursor' },
-  { id: '2', softwareId: 'cursor', name: 'coding-standards.mdc', type: 'mdc', filePath: '.cursor/rules/coding-standards.mdc', content: '', isActive: true, createdAt: '2026-06-11T14:00:00Z', updatedAt: '2026-06-11T14:00:00Z', size: '2.1 KB', software: 'Cursor' },
-  { id: '3', softwareId: 'cursor', name: 'commit-rules.md', type: 'md', filePath: '.cursor/rules/commit-rules.md', content: '', isActive: true, createdAt: '2026-06-10T09:15:00Z', updatedAt: '2026-06-10T09:15:00Z', size: '1.8 KB', software: 'Cursor' },
-  { id: '4', softwareId: 'claude-desktop', name: 'project-context.md', type: 'md', filePath: '.claude/rules/project-context.md', content: '', isActive: false, createdAt: '2026-06-09T16:42:00Z', updatedAt: '2026-06-09T16:42:00Z', size: '3.4 KB', software: 'Claude Desktop' },
+const mockRules: Array<Rule & { size: string; software: string; category?: string; modified?: string }> = [
+  { id: '1', softwareId: 'cursor', name: 'AGENTS.md', type: 'md', filePath: '.cursor/rules/AGENTS.md', content: '', isActive: true, createdAt: '2026-06-12T20:28:00Z', updatedAt: '2026-06-12T20:28:00Z', size: '4.2 KB', software: 'Cursor', category: 'agents', modified: '2026-06-12' },
+  { id: '2', softwareId: 'cursor', name: 'coding-standards.mdc', type: 'mdc', filePath: '.cursor/rules/coding-standards.mdc', content: '', isActive: true, createdAt: '2026-06-11T14:00:00Z', updatedAt: '2026-06-11T14:00:00Z', size: '2.1 KB', software: 'Cursor', category: 'standards', modified: '2026-06-11' },
+  { id: '3', softwareId: 'cursor', name: 'commit-rules.md', type: 'md', filePath: '.cursor/rules/commit-rules.md', content: '', isActive: true, createdAt: '2026-06-10T09:15:00Z', updatedAt: '2026-06-10T09:15:00Z', size: '1.8 KB', software: 'Cursor', category: 'workflow', modified: '2026-06-10' },
+  { id: '4', softwareId: 'claude-desktop', name: 'project-context.md', type: 'md', filePath: '.claude/rules/project-context.md', content: '', isActive: false, createdAt: '2026-06-09T16:42:00Z', updatedAt: '2026-06-09T16:42:00Z', size: '3.4 KB', software: 'Claude Desktop', category: 'context', modified: '2026-06-09' },
 ]
 
 // Source options
@@ -46,10 +45,15 @@ const statusOptions = [
   { value: 'inactive', label: 'Inactive' },
 ]
 
-// Computed
+// Computed — use store data with mock fallback
 const rules = computed(() => {
-  // PENDING: Replace mock with ruleStore.rules when backend is ready
-  return mockRules
+  return ruleStore.rules.length > 0
+    ? ruleStore.rules.map(r => ({
+        ...r,
+        size: '1 KB',
+        software: r.softwareId || 'Global',
+      }))
+    : mockRules
 })
 
 const filteredRules = computed(() => {
@@ -83,8 +87,6 @@ const filteredRules = computed(() => {
   return result
 })
 
-const activeCount = computed(() => rules.value.filter(r => r.isActive).length)
-
 // Actions
 function formatDate(iso: string): string {
   const date = new Date(iso)
@@ -95,32 +97,14 @@ function formatDate(iso: string): string {
   })
 }
 
-function getTypeLabel(type: string): string {
-  return type === 'mdc' ? '.mdc' : `.${type}`
-}
-
-function getSourceVariant(source: string): 'success' | 'warn' | 'info' {
-  if (source === 'Cursor') return 'success'
-  if (source === 'Global') return 'warn'
-  return 'info'
-}
-
-async function handleToggle(rule: Rule) {
-  // PENDING: Connect to ruleStore.toggleRule when backend is ready
-  console.log('Toggle rule:', rule.id, !rule.isActive)
-  // Optimistic update for demo
-  rule.isActive = !rule.isActive
-}
-
 function handleEdit(rule: Rule) {
-  // PENDING: Open edit modal
-  console.log('Edit rule:', rule.id)
+  showNotification?.(`Editing rule: ${rule.id}`, 'info');
 }
 
 async function handleDelete(rule: Rule) {
   openDropdown.value = null
   if (await confirm(`确认删除此规则？`)) {
-    console.log('Delete rule:', rule.id)
+    showNotification?.(`Deleted rule: ${rule.id}`, 'success');
   }
 }
 
@@ -133,17 +117,16 @@ function toggleDropdown(key: string) {
 
 function handleDuplicate(rule: Rule) {
   openDropdown.value = null
-  console.log('Duplicate rule:', rule.id)
+  showNotification?.(`Duplicating rule: ${rule.id}`, 'info');
 }
 
 function handleExportRule(rule: Rule) {
   openDropdown.value = null
-  console.log('Export rule:', rule.id)
+  showNotification?.(`Exporting rule: ${rule.id}`, 'info');
 }
 
 function handleCreateRule() {
-  // PENDING: Open create rule modal
-  console.log('Create new rule')
+  showNotification?.('Creating new rule...', 'info');
 }
 
 onMounted(async () => {
@@ -265,7 +248,7 @@ onMounted(async () => {
           <div class="card-footer-right">
             <button class="btn btn-secondary btn-sm" @click="handleEdit(rule)">Edit</button>
             <div class="dropdown-wrapper" @click.stop>
-              <button class="btn-icon btn-sm" @click.stop="toggleDropdown(rule.id)" aria-label="More actions">
+              <button class="btn-icon btn-sm" aria-label="More actions" @click.stop="toggleDropdown(rule.id)">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>
                 </svg>

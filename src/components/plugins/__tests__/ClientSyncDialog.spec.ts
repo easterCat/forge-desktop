@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { ref, computed } from 'vue'
 import ClientSyncDialog from '../ClientSyncDialog.vue'
-import { useClientSync } from '@/composables/useClientSync'
+import { useClientSync, type ClientInfo } from '@/composables/useClientSync'
 import { invoke } from '@tauri-apps/api/core'
 
 // Mock CliSyncChip component
@@ -20,70 +21,109 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 // Build the mock composable using vi.hoisted so it's available before hoisted vi.mock calls.
 // This avoids the vue-toastification resolution issue while keeping the same API.
-const mockUseClientSync = vi.hoisted(() => {
-  const { ref, computed } = require('vue')
+// Mock useClientSync composable (mocks are hoisted via vi.hoisted).
+//
+// `require()` is used here intentionally: vi.hoisted runs the factory
+// before the module's `import` statements are evaluated, so a static
+// `import { ref, computed } from 'vue'` would not be available at this
+// point. The runtime `require` is the only way to access Vue inside
+// the hoisted factory.
+// Build the mock composable using vi.hoisted so it's available before hoisted vi.mock calls.
+// This avoids the vue-toastification resolution issue while keeping the same API.
+//
+// The factory returns both the invoke holder and the mockUseClientSync
+// builder so all dependencies are established before vi.mock runs.
+const mockSetup = vi.hoisted(() => {
+  type SpecClient = {
+    key: string
+    name: string
+    icon: string
+    color: string
+    isInstalled: boolean
+    isSynced: boolean
+  }
 
-  return () => {
-    const clients = ref([
-      { key: 'claude', name: 'Claude Code', icon: '/icons/claude.svg', color: '#D97706', isInstalled: true, isSynced: false },
-      { key: 'cursor', name: 'Cursor', icon: '/icons/cursor.svg', color: '#7C3AED', isInstalled: true, isSynced: false },
-      { key: 'copilot', name: 'GitHub Copilot', icon: '/icons/copilot.svg', color: '#6E40C9', isInstalled: false, isSynced: false }
-    ])
-    const syncingClient = ref(null)
-    const isDialogOpen = ref(false)
-    const isLoading = ref(false)
+  const invokeHolder: { fn: (...args: unknown[]) => unknown } = { fn: async () => undefined }
 
-    const totalSyncedCount = computed(() => clients.value.filter(c => c.isSynced).length)
+  return {
+    invokeHolder,
+    // Captured statically-imported Vue APIs by reference through
+    // closures set in `installVueApis` below. This indirection keeps
+    // the mock factory callable before module imports resolve.
+    build: (vueApis: { ref: typeof import('vue').ref; computed: typeof import('vue').computed }) => () => {
+      const { ref, computed } = vueApis
+      const clients = ref<SpecClient[]>([
+        { key: 'claude', name: 'Claude Code', icon: '/icons/claude.svg', color: '#D97706', isInstalled: true, isSynced: false },
+        { key: 'cursor', name: 'Cursor', icon: '/icons/cursor.svg', color: '#7C3AED', isInstalled: true, isSynced: false },
+        { key: 'copilot', name: 'GitHub Copilot', icon: '/icons/copilot.svg', color: '#6E40C9', isInstalled: false, isSynced: false }
+      ])
+      const syncingClient = ref<string | null>(null)
+      const isDialogOpen = ref(false)
+      const isLoading = ref(false)
 
-    const toggleDialog = () => { isDialogOpen.value = !isDialogOpen.value }
+      const totalSyncedCount = computed(() => clients.value.filter((c: SpecClient) => c.isSynced).length)
 
-    const toggleSync = async (clientKey) => {
-      const client = clients.value.find(c => c.key === clientKey)
-      if (!client?.isInstalled) return
+      const toggleDialog = () => { isDialogOpen.value = !isDialogOpen.value }
 
-      syncingClient.value = clientKey
-      try {
-        await invoke('allagents_update', { client: clientKey })
-        const idx = clients.value.findIndex(c => c.key === clientKey)
-        if (idx !== -1) {
-          clients.value[idx] = { ...clients.value[idx], isSynced: !clients.value[idx].isSynced }
+      const toggleSync = async (clientKey: string) => {
+        const client = clients.value.find((c: SpecClient) => c.key === clientKey)
+        if (!client?.isInstalled) return
+        syncingClient.value = clientKey
+        try {
+          await invokeHolder.fn('allagents_update', { client: clientKey })
+          const idx = clients.value.findIndex((c: SpecClient) => c.key === clientKey)
+          if (idx !== -1) {
+            clients.value[idx] = { ...clients.value[idx], isSynced: !clients.value[idx].isSynced }
+          }
+        } finally {
+          syncingClient.value = null
         }
-      } finally {
-        syncingClient.value = null
       }
-    }
 
-    const syncAll = async () => {
-      const unsynced = clients.value.filter(c => c.isInstalled && !c.isSynced)
-      for (const client of unsynced) {
-        await toggleSync(client.key)
+      const syncAll = async () => {
+        const unsynced = clients.value.filter((c: SpecClient) => c.isInstalled && !c.isSynced)
+        for (const client of unsynced) {
+          await toggleSync(client.key)
+        }
       }
-    }
 
-    const initClients = async () => {
-      isLoading.value = true
-      try {
-        const status = await invoke('allagents_status')
-        clients.value = clients.value.map(c => ({
-          ...c,
-          isInstalled: status.installedClients.includes(c.key),
-          isSynced: status.syncedClients.includes(c.key)
-        }))
-      } finally {
-        isLoading.value = false
+      const initClients = async () => {
+        isLoading.value = true
+        try {
+          const status = (await invokeHolder.fn('allagents_status')) as { installedClients: string[]; syncedClients: string[] }
+          clients.value = clients.value.map(c => ({
+            ...c,
+            isInstalled: status.installedClients.includes(c.key),
+            isSynced: status.syncedClients.includes(c.key)
+          }))
+        } finally {
+          isLoading.value = false
+        }
       }
-    }
 
-    return { clients, totalSyncedCount, isDialogOpen, syncingClient, isLoading, toggleDialog, toggleSync, syncAll, initClients }
+      return { clients, totalSyncedCount, isDialogOpen, syncingClient, isLoading, toggleDialog, toggleSync, syncAll, initClients }
+    }
   }
 })
 
+// Wire Vue APIs into the hoisted builder and install the mock module
+// before any test imports resolve.
+mockSetup.build({ ref, computed })
+
 vi.mock('@/composables/useClientSync', () => ({
-  useClientSync: mockUseClientSync
+  useClientSync: mockSetup.build({ ref, computed })
 }))
 
+// Make `mockSetup.invokeHolder.fn` track `vi.mocked(invoke)` so tests
+// can stub responses. This is done at runtime (after vi.mock has wired
+// the mock) so the mocked invoke is captured correctly.
+beforeEach(() => {
+  vi.mocked(invoke).mockReset()
+  mockSetup.invokeHolder.fn = (...args: unknown[]) => invoke(...(args as Parameters<typeof invoke>))
+})
+
 describe('ClientSyncDialog', () => {
-  const mockClients = [
+  const mockClients: ClientInfo[] = [
     { key: 'claude', name: 'Claude Code', icon: '/icons/claude.svg', color: '#D97706', isInstalled: true, isSynced: true },
     { key: 'cursor', name: 'Cursor', icon: '/icons/cursor.svg', color: '#7C3AED', isInstalled: true, isSynced: false },
     { key: 'copilot', name: 'GitHub Copilot', icon: '/icons/copilot.svg', color: '#6E40C9', isInstalled: false, isSynced: false }

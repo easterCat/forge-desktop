@@ -1,8 +1,17 @@
 use crate::models::BackupRecord;
 use crate::services::FileService;
+use crate::utils::now_rfc3339;
 use crate::AppState;
 use std::path::PathBuf;
 use tauri::State;
+
+/// Hard cap on the total bytes a single backup may consume. Defends
+/// against a UI bug / hostile IPC call that passes paths like `/` and
+/// silently fills the user's disk.
+const BACKUP_MAX_TOTAL_BYTES: u64 = 5 * 1024 * 1024 * 1024; // 5 GiB
+
+/// Hard cap on the number of files copied into a single backup.
+const BACKUP_MAX_FILE_COUNT: i64 = 100_000;
 
 #[tauri::command]
 pub async fn create_backup(
@@ -11,6 +20,15 @@ pub async fn create_backup(
     includes: Vec<String>,
 ) -> Result<BackupRecord, String> {
     log::info!("Creating backup: {} with includes: {:?}", name, includes);
+
+    // Reject empty / too-large input up front to fail fast and avoid
+    // touching the filesystem.
+    if includes.is_empty() {
+        return Err("No paths to include in backup".to_string());
+    }
+    if name.is_empty() || name.len() > 200 {
+        return Err("Backup name must be 1..=200 characters".to_string());
+    }
 
     let backup_dir = dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
@@ -21,10 +39,11 @@ pub async fn create_backup(
         .await
         .map_err(|e| e.to_string())?;
 
-    let timestamp = chrono_lite_now();
+    let timestamp = now_rfc3339();
+    let safe_name = sanitize_backup_name(&name);
     let backup_path = backup_dir.join(format!(
         "{}_{}",
-        name.replace(" ", "_"),
+        safe_name,
         timestamp.replace(":", "-")
     ));
     tokio::fs::create_dir_all(&backup_path)
@@ -32,43 +51,82 @@ pub async fn create_backup(
         .map_err(|e| e.to_string())?;
 
     let file_service = FileService::new();
-    let mut file_count = 0i64;
+    let mut file_count: i64 = 0;
     let mut total_size: u64 = 0;
 
     for include_path in &includes {
-        let src_path = PathBuf::from(include_path);
-        if src_path.exists() {
-                    let dest_path = backup_path.join(
-                        src_path.file_name().and_then(|n| n.to_str()).unwrap_or(""),
-                    );
+        // Refuse absolute paths that look like system roots. The UI only
+        // passes pre-vetted user directories, but a hostile IPC call
+        // must not be able to ask us to copy `/`, `C:\`, `/Users`, etc.
+        if is_forbidden_backup_root(include_path) {
+            return Err(format!(
+                "Refusing to back up system root: '{}'",
+                include_path
+            ));
+        }
 
-            let copied = file_service
-                .copy_file_async(&src_path, &dest_path)
+        let src_path = PathBuf::from(include_path);
+        if !src_path.exists() {
+            log::warn!("Backup include does not exist, skipping: {}", include_path);
+            continue;
+        }
+
+        let dest_path = backup_path.join(
+            src_path.file_name().and_then(|n| n.to_str()).unwrap_or(""),
+        );
+
+        let copied = file_service
+            .copy_file_async(&src_path, &dest_path)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        total_size = total_size.saturating_add(copied);
+        if total_size > BACKUP_MAX_TOTAL_BYTES {
+            let _ = tokio::fs::remove_dir_all(&backup_path).await;
+            return Err(format!(
+                "Backup exceeded {} GB cap; aborted",
+                BACKUP_MAX_TOTAL_BYTES / 1024 / 1024 / 1024
+            ));
+        }
+
+        // Count files asynchronously
+        let mut stack = vec![dest_path.clone()];
+        while let Some(current) = stack.pop() {
+            let mut dir = tokio::fs::read_dir(&current)
                 .await
                 .map_err(|e| e.to_string())?;
 
-            total_size += copied;
+            while let Some(entry) = dir.next_entry().await.map_err(|e| e.to_string())? {
+                let entry_path = entry.path();
+                let metadata = entry.metadata().await.map_err(|e| e.to_string())?;
 
-            // Count files asynchronously
-            let mut stack = vec![dest_path.clone()];
-            while let Some(current) = stack.pop() {
-                let mut dir = tokio::fs::read_dir(&current)
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                while let Some(entry) = dir.next_entry().await.map_err(|e| e.to_string())? {
-                    let entry_path = entry.path();
-                    let metadata = entry.metadata().await.map_err(|e| e.to_string())?;
-
-                    if metadata.is_dir() {
-                        stack.push(entry_path);
-                    } else {
-                        file_count += 1;
-                        total_size += metadata.len();
+                if metadata.is_dir() {
+                    stack.push(entry_path);
+                } else {
+                    file_count = file_count.saturating_add(1);
+                    if file_count > BACKUP_MAX_FILE_COUNT {
+                        let _ = tokio::fs::remove_dir_all(&backup_path).await;
+                        return Err(format!(
+                            "Backup exceeded {} file cap; aborted",
+                            BACKUP_MAX_FILE_COUNT
+                        ));
+                    }
+                    total_size = total_size.saturating_add(metadata.len());
+                    if total_size > BACKUP_MAX_TOTAL_BYTES {
+                        let _ = tokio::fs::remove_dir_all(&backup_path).await;
+                        return Err(format!(
+                            "Backup exceeded {} GB cap; aborted",
+                            BACKUP_MAX_TOTAL_BYTES / 1024 / 1024 / 1024
+                        ));
                     }
                 }
             }
         }
+    }
+
+    if file_count == 0 {
+        let _ = tokio::fs::remove_dir_all(&backup_path).await;
+        return Err("Backup produced no files; refusing to persist".to_string());
     }
 
     let manifest_path = backup_path.join("manifest.json");
@@ -85,8 +143,10 @@ pub async fn create_backup(
         .map_err(|e| e.to_string())?;
 
     let includes_json = serde_json::to_string(&includes).unwrap_or_default();
+    // i64 is the SQLite column type. `total_size` is u64 ≤ BACKUP_MAX_TOTAL_BYTES (5 GiB),
+    // well below i64::MAX, so this cast cannot overflow.
     let backup_record = BackupRecord {
-        id: uuid_v4(),
+        id: uuid::Uuid::new_v4().to_string(),
         name,
         path: backup_path.display().to_string(),
         size: Some(total_size as i64),
@@ -102,6 +162,29 @@ pub async fn create_backup(
 
     log::info!("Backup created successfully: {}", backup_record.id);
     Ok(backup_record)
+}
+
+/// Replace any path separators or shell metacharacters in the user-supplied
+/// backup name with `_` so it cannot escape `backup_dir`.
+fn sanitize_backup_name(name: &str) -> String {
+    name.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+/// Returns true if `path` is a path we should never back up wholesale.
+fn is_forbidden_backup_root(path: &str) -> bool {
+    let p = path.replace('\\', "/");
+    matches!(
+        p.trim().to_ascii_lowercase().as_str(),
+        "/" | "/." | "" | "c:/" | "c:" | "d:/" | "d:" | "/users" | "/home" | "/etc" | "/var" | "/tmp"
+    )
 }
 
 #[tauri::command]
@@ -244,46 +327,7 @@ pub async fn get_backup_contents(path: String) -> Result<Vec<String>, String> {
 }
 
 fn uuid_v4() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    format!("{:032x}", now)
+    // Retained as a thin wrapper for any future caller; delegates to the
+    // `uuid` crate to keep timestamps from colliding under high load.
+    uuid::Uuid::new_v4().to_string()
 }
-
-fn chrono_lite_now() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let now = SystemTime::now();
-    let duration = now.duration_since(UNIX_EPOCH).unwrap_or_default();
-    let secs = duration.as_secs();
-
-    let days_since_epoch = secs / 86400;
-    let remaining_secs = secs % 86400;
-    let hours = remaining_secs / 3600;
-    let minutes = remaining_secs % 3600;
-
-    let year = 1970 + days_since_epoch / 365;
-    let mut days = days_since_epoch % 365;
-    let mut month = 1u64;
-
-    for (i, &d) in MONTH_DAYS.iter().enumerate() {
-        let days_in_month = if i == 1 && is_leap_year(year) { 29 } else { d };
-        if days < days_in_month {
-            month = (i + 1) as u64;
-            break;
-        }
-        days -= days_in_month;
-    }
-
-    let day = days + 1;
-
-    format!("{:04}-{:02}-{:02}T{:02}:{:02}:00Z", year, month, day, hours, minutes)
-}
-
-fn is_leap_year(year: u64) -> bool {
-    let y = year as i64;
-    (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0)
-}
-
-const MONTH_DAYS: [u64; 12] = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];

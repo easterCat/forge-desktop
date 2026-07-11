@@ -136,9 +136,11 @@ function parseArgs(args) {
         options.purge = true;
         break;
       case '--help':
+      /* falls through */
       case '-h':
         printHelp();
         process.exit(0);
+        break;
       default:
         if (!arg.startsWith('-')) {
           options.pluginName = arg;

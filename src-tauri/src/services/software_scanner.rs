@@ -1,10 +1,10 @@
 use crate::models::{Software, SoftwareStatus};
+use crate::utils::now_rfc3339;
 use std::path::PathBuf;
 use std::time::Duration;
 use thiserror::Error;
 
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
+use crate::commands_ext::CommandExt;
 
 #[derive(Error, Debug)]
 pub enum ScannerError {
@@ -55,7 +55,7 @@ impl From<DetectedSoftware> for Software {
             install_path: None,
             config_path: detected.config_path,
             is_installed: detected.is_installed,
-            last_checked: Some(chrono_lite_now()),
+            last_checked: Some(now_rfc3339()),
             latest_version: None,
             is_upgradable: false,
             status,
@@ -529,7 +529,7 @@ impl SoftwareScanner {
             install_path,
             config_path: config_path.display().to_string(),
             is_installed,
-            last_checked: Some(chrono_lite_now()),
+            last_checked: Some(now_rfc3339()),
             latest_version: None,
             is_upgradable: false,
             status,
@@ -576,7 +576,7 @@ impl SoftwareScanner {
                 None
             };
 
-            let last_checked = chrono_lite_now();
+            let last_checked = now_rfc3339();
             let status = self.compute_status(is_installed, version.as_deref(), None);
 
             results.push(Software {
@@ -646,7 +646,7 @@ impl SoftwareScanner {
             install_path,
             config_path: config_path.display().to_string(),
             is_installed,
-            last_checked: Some(chrono_lite_now()),
+            last_checked: Some(now_rfc3339()),
             latest_version: None,
             is_upgradable: false,
             status,
@@ -1401,46 +1401,6 @@ fn uuid_from_key(key: &str) -> String {
 
     format!("{:016x}-0000-0000-0000-{:012x}", hash, hash >> 4)
 }
-
-fn chrono_lite_now() -> String {
-    let now = std::time::SystemTime::now();
-    let duration = now
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default();
-    let secs = duration.as_secs();
-
-    let days_since_epoch = secs / 86400;
-    let remaining_secs = secs % 86400;
-    let hours = remaining_secs / 3600;
-    let minutes = remaining_secs % 3600;
-
-    let year = 1970 + days_since_epoch / 365;
-    let mut days = days_since_epoch % 365;
-    let mut month = 1u64;
-
-    for (i, &d) in MONTH_DAYS.iter().enumerate() {
-        let days_in_month = if i == 1 && is_leap_year(year) { 29 } else { d };
-        if days < days_in_month {
-            month = (i + 1) as u64;
-            break;
-        }
-        days -= days_in_month;
-    }
-
-    let day = days + 1;
-
-    format!(
-        "{:04}-{:02}-{:02}T{:02}:{:02}:00Z",
-        year, month, day, hours, minutes
-    )
-}
-
-fn is_leap_year(year: u64) -> bool {
-    let y = year as i64;
-    (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0)
-}
-
-const MONTH_DAYS: [u64; 12] = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
 /// Best-effort fallback for software whose binary is in a well-known location
 /// but isn't on PATH. Returning `None` is always safe — it just means the UI

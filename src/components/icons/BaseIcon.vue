@@ -30,8 +30,6 @@
 </template>
 
 <script setup lang="ts">
-defineOptions({ name: 'BaseIcon' })
-
 withDefaults(defineProps<{
   size?: number | string
   color?: string
@@ -41,4 +39,7 @@ withDefaults(defineProps<{
   color: 'currentColor',
   strokeWidth: 1.5,
 })
+
+defineOptions({ name: 'BaseIcon' })
+
 </script>

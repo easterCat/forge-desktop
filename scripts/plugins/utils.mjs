@@ -103,8 +103,8 @@ export function writeJson(filePath, data) {
     try {
       copyFileSync(tmpPath, filePath);
       unlinkSync(tmpPath);
-    } catch (copyError) {
-      try { unlinkSync(tmpPath); } catch {}
+    } catch {
+      try { unlinkSync(tmpPath); } catch { /* cleanup best-effort */ }
       throw error;
     }
   }
@@ -170,9 +170,9 @@ export function exec(command, args, options = {}) {
  */
 export function parseGitHubUrl(url) {
   const patterns = [
-    /github\.com\/([^\/]+)\/([^\/]+?)(?:\.git)?$/,
-    /github\.com\/([^\/]+)\/([^\/]+?)(?:\.git)?\/tree\/([^\/]+)/,
-    /github\.com\/([^\/]+)\/([^\/]+?)(?:\.git)?\/pull\/(\d+)/
+    new RegExp('github\\.com/([^/]+)/([^/]+?)(?:\\.git)?$'),
+    new RegExp('github\\.com/([^/]+)/([^/]+?)(?:\\.git)?/tree/([^/]+)/'),
+    new RegExp('github\\.com/([^/]+)/([^/]+?)(?:\\.git)?/pull/(\\d+)')
   ];
 
   for (const pattern of patterns) {
@@ -229,7 +229,7 @@ export function removeEmptyDir(dirPath) {
       return true;
     }
     return false;
-  } catch (error) {
+  } catch {
     return false;
   }
 }
@@ -326,7 +326,7 @@ export class FileLock {
       if (existsSync(this.lockPath)) {
         rmSync(this.lockPath);
       }
-    } catch (error) {
+    } catch {
       // Ignore errors on release
     }
   }

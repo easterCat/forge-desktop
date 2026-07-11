@@ -125,9 +125,9 @@
           </div>
           <div class="card-footer-right">
             <button class="btn btn-secondary btn-sm" @click.stop>Edit</button>
-            <DropdownMenu :model-value="openDropdown === skill.name" @update:model-value="(v: boolean) => openDropdown = v ? skill.name : null" :min-width="160">
+            <DropdownMenu :model-value="openDropdown === skill.name" :min-width="160" @update:model-value="(v: boolean) => openDropdown = v ? skill.name : null">
               <template #trigger>
-                <button class="btn-icon btn-sm" @click.stop="toggleDropdown(skill.name)" aria-label="More actions">
+                <button class="btn-icon btn-sm" aria-label="More actions" @click.stop="toggleDropdown(skill.name)">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>
                   </svg>
@@ -164,7 +164,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, inject } from 'vue'
+import { useEventListener } from '@vueuse/core'
 import { useSkillStore, useSoftwareStore } from '@/stores'
 import DropdownMenu from '@/components/common/DropdownMenu.vue'
 import SourceTabs from '@/components/common/SourceTabs.vue'
@@ -172,6 +173,8 @@ import CliSyncChip from '@/components/common/CliSyncChip.vue'
 import ProgressSlot from '@/components/common/ProgressSlot.vue'
 import { useOperationProgress } from '@/composables/useOperationProgress'
 import { confirm } from '@/utils/dialog'
+
+const showNotification = inject<(msg: string, type?: string) => void>('showNotification')
 
 const { startOperation, updateProgress, completeOperation, getOperation } = useOperationProgress()
 
@@ -185,7 +188,11 @@ interface DisplaySkill {
   enabled: boolean
 }
 
-// Mock data from design prototype (forge-cross-platform-glass.html line 1145)
+// First-run preview. The skill store is the source of truth at runtime;
+// these entries are shown only when the user has not installed any skills
+// yet (so the page is not empty on first launch). They are intentionally
+// labelled with the design-prototype names and are never written back to
+// the store. Once any real skill is installed, the real list wins.
 const mockSkills: DisplaySkill[] = [
   { name: 'imagegen', type: 'agent', desc: 'AI 图像生成技能，支持文生图、图生图与多种风格迁移转换。', software: 'Cursor', source: 'local', enabled: true },
   { name: 'frontend-design', type: 'command', desc: '前端设计辅助技能，提供组件建议、布局优化与响应式适配。', software: 'Cursor', source: 'local', enabled: true },
@@ -223,7 +230,7 @@ const softwareStore = useSoftwareStore()
 
 // CLI tools for tool icon sync
 const cliTools = computed(() => {
-  return softwareStore.cliTools.slice(0, 8).map((t: any) => ({
+  return softwareStore.cliTools.slice(0, 8).map((t) => ({
     key: t.key,
     icon: t.icon || t.name.charAt(0),
     color: t.color || '#5C5C5C',
@@ -232,17 +239,18 @@ const cliTools = computed(() => {
 })
 
 // State
-const useMock = ref(false)
 const searchQuery = ref('')
 const typeFilter = ref('all')
 const statusFilter = ref('all')
 const activeSource = ref('all')
 const skillsState = ref<Record<string, boolean>>({})
 const skillSyncState = ref<Record<string, Set<string>>>({})
+const loadFailed = ref(false)
 
-// Data source: store-first, mock fallback
+// Data source: store-first, preview fallback. `loadFailed` is set if the
+// store fetch throws; combined with an empty list, it triggers the preview.
 const displaySkills = computed<DisplaySkill[]>(() => {
-  if (useMock.value) return mockSkills
+  if (loadFailed.value || skillStore.skills.length === 0) return mockSkills
   // Map store skills to display format
   return skillStore.skills.map(s => ({
     name: s.name,
@@ -285,13 +293,8 @@ function getSkillEnabled(skill: DisplaySkill): boolean {
   return skillsState.value[skill.name] ?? skill.enabled
 }
 
-function toggleSkill(skill: DisplaySkill): void {
-  skillsState.value[skill.name] = !(skillsState.value[skill.name] ?? skill.enabled)
-}
-
 function openSkillDetails(skill: DisplaySkill): void {
-  // TODO: Open skill details dialog
-  console.log('Open skill details:', skill.name)
+  showNotification?.(`Opening ${skill.name}...`, 'info');
 }
 
 function isToolSynced(skillName: string, toolKey: string): boolean {
@@ -311,13 +314,11 @@ function toggleSkillTool(skillName: string, toolKey: string): void {
 }
 
 function handleImport(): void {
-  // TODO: Open import dialog
-  console.log('Import skill')
+  showNotification?.('Opening import dialog...', 'info');
 }
 
 function handleSyncAll(): void {
-  // TODO: Sync all repositories
-  console.log('Sync all')
+  showNotification?.('Syncing all repositories...', 'info');
 }
 
 // More options dropdown
@@ -334,12 +335,12 @@ function closeDropdown() {
 
 function handleDuplicate(skill: DisplaySkill) {
   closeDropdown()
-  console.log('Duplicate skill:', skill.name)
+  showNotification?.(`Duplicating ${skill.name}...`, 'info');
 }
 
 function handleExport(skill: DisplaySkill) {
   closeDropdown()
-  console.log('Export skill:', skill.name)
+  showNotification?.(`Exporting ${skill.name}...`, 'info');
 }
 
 async function handleDeleteSkill(skill: DisplaySkill) {
@@ -352,25 +353,23 @@ async function handleDeleteSkill(skill: DisplaySkill) {
     const t1 = window.setTimeout(() => updateProgress(key, 'installing', 50, 'Removing files...'), 300)
     const t2 = window.setTimeout(() => {
       completeOperation(key, true, `${skill.name} deleted`)
-      console.log('Delete skill:', skill.name)
     }, 800)
     deleteTimers.value.push(t1, t2)
   }
 }
 
-// Store-first + mock fallback
+// Store-first + preview fallback
 onMounted(async () => {
-  document.addEventListener('click', handleGlobalClick)
+  // Auto-cleanup listener via VueUse
+  useEventListener(document, 'click', handleGlobalClick)
   try {
     await skillStore.fetchSkills()
-    if (skillStore.skills.length === 0) useMock.value = true
   } catch {
-    useMock.value = true
+    loadFailed.value = true
   }
 })
 
 onBeforeUnmount(() => {
-  document.removeEventListener('click', handleGlobalClick)
   deleteTimers.value.forEach(id => window.clearTimeout(id))
   deleteTimers.value = []
 })

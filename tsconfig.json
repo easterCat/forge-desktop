@@ -26,5 +26,5 @@
     "src/**/*.tsx",
     "src/**/*.vue"
   ],
-  "exclude": ["node_modules", "dist", "src-tauri", "src/composables/__tests__/**"]
+  "exclude": ["node_modules", "dist", "src-tauri"]
 }

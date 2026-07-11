@@ -121,7 +121,7 @@
 
       <!-- Load More -->
       <div v-if="store.pagination.hasMore && !store.isLoading" class="load-more">
-        <button class="btn btn-secondary" @click="store.loadMore()" :disabled="store.isLoadingMore">
+        <button class="btn btn-secondary" :disabled="store.isLoadingMore" @click="store.loadMore()">
           {{ store.isLoadingMore ? '加载中...' : '加载更多' }}
         </button>
       </div>
@@ -136,8 +136,8 @@
             <line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
           <input
-            type="text"
             v-model="searchQuery"
+            type="text"
             placeholder="搜索 skills..."
             @input="handleSearch"
           />
@@ -291,7 +291,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useSkillsShStore } from '@/stores/skills-sh';
 import SkillsShSkillCard from './SkillsShSkillCard.vue';
 import SkillsShSourceGroupView from './SkillsShSourceGroup.vue';
@@ -382,7 +382,7 @@ async function copyInstallCommand(skill: SkillsShSkill) {
     await navigator.clipboard.writeText(cmd);
     successMessage.value = '安装命令已复制到剪贴板';
     setTimeout(() => { successMessage.value = ''; }, 2000);
-  } catch (e) {
+  } catch {
     errorMessage.value = '复制失败';
     setTimeout(() => { errorMessage.value = ''; }, 2000);
   }

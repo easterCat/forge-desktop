@@ -16,7 +16,7 @@ export interface Software {
   platform?: string;
 }
 
-export type InstallMethod = 'npm' | 'curl-bash' | 'npm-curl-fallback';
+export type InstallMethod = 'npm' | 'curl-bash' | 'npm-curl-fallback' | 'brew';
 
 export interface CliTool {
   id: string;
@@ -33,7 +33,11 @@ export interface CliTool {
   latestVersionChecked: string | null;
   npmPackage?: string;
   websiteUrl?: string;
-  pluginDir?: string;  // Plugin directory path for this CLI tool (e.g. ~/.claude/plugins/)
+  pluginDir?: string;
+  /** Whether this tool is user-defined (custom) */
+  isCustom?: boolean;
+  /** Where this tool comes from: allagents | custom */
+  displaySource?: 'allagents' | 'custom';
 }
 
 export interface CliToolStatus {
@@ -53,4 +57,15 @@ export interface UpgradeResult {
   message: string;
   newVersion: string | null;
   method: InstallMethod;
+}
+
+export interface CustomCliToolConfig {
+  key: string;
+  name: string;
+  installMethod: InstallMethod;
+  installCommand: string;
+  detectCommand: string;
+  websiteUrl?: string;
+  pluginDir?: string;
+  installTimeoutSecs?: number;
 }

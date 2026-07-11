@@ -9,11 +9,10 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type {
-  UnifiedPlugin,
   SyncTarget,
   ClientType,
 } from '@/types/unified-plugin';
-import { SUPPORTED_CLIENTS } from '@/types/unified-plugin';
+
 
 // ============================================================================
 // Rule 类型 (保留现有接口)
@@ -105,7 +104,7 @@ export const useUnifiedRuleStore = defineStore('unified-rule', () => {
     error.value = null;
 
     try {
-      const result = await invoke<{ success: boolean; data?: any; error?: string }>(
+      const result = await invoke<{ success: boolean; data?: Rule[]; error?: string }>(
         'get_rules',
         { softwareId: softwareId || '' }
       );
@@ -263,9 +262,6 @@ export const useUnifiedRuleStore = defineStore('unified-rule', () => {
     error.value = null;
 
     try {
-      // 生成包含规则的 workspace.yaml 配置
-      const config = generateWorkspaceConfigWithRules();
-
       // 写入配置文件
       const writeResult = await invoke<{ success: boolean; error?: string }>(
         'allagents_generate_config',
@@ -283,7 +279,7 @@ export const useUnifiedRuleStore = defineStore('unified-rule', () => {
       }
 
       // 执行同步
-      const syncResult = await invoke<{ success: boolean; data?: any; error?: string }>(
+      const syncResult = await invoke<{ success: boolean; data?: unknown; error?: string }>(
         'allagents_update',
         {
           workspacePath: '',
@@ -330,20 +326,6 @@ export const useUnifiedRuleStore = defineStore('unified-rule', () => {
     } finally {
       isSyncing.value = false;
     }
-  }
-
-  /** 生成包含规则的 workspace 配置 */
-  function generateWorkspaceConfigWithRules() {
-    const activeRulesList = rules.value.filter(r => r.isActive);
-
-    return {
-      workspace: {
-        files: activeRulesList.map(rule => ({
-          source: rule.filePath,
-          dest: rule.name,
-        })),
-      },
-    };
   }
 
   // ==========================================================================

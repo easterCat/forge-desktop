@@ -6,7 +6,7 @@ import {
   parseAllagentsSpec,
   getPluginDisplayTags,
 } from '@/types/unified-plugin';
-import type { UnifiedPlugin, PluginSource } from '@/types/unified-plugin';
+import type { UnifiedPlugin } from '@/types/unified-plugin';
 
 describe('unified-plugin types', () => {
   describe('SUPPORTED_CLIENTS', () => {
@@ -19,6 +19,11 @@ describe('unified-plugin types', () => {
       expect(SUPPORTED_CLIENTS).toContain('copilot');
       expect(SUPPORTED_CLIENTS).toContain('cursor');
       expect(SUPPORTED_CLIENTS).toContain('codex');
+    });
+
+    it('should include openclaw (provider-specific)', () => {
+      expect(SUPPORTED_CLIENTS).toContain('openclaw');
+      expect(SUPPORTED_CLIENTS.indexOf('openclaw')).toBeGreaterThan(7); // Should be in provider section
     });
 
     it('should have display names for all clients', () => {

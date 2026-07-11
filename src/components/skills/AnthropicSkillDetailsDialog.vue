@@ -22,7 +22,7 @@
               </div>
             </div>
           </div>
-          <button class="close-btn" @click="handleClose" aria-label="关闭">
+          <button class="close-btn" aria-label="关闭" @click="handleClose">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
@@ -54,7 +54,7 @@
                 <span class="label">路径</span>
                 <span class="value path">{{ skill.subdirectory }}</span>
               </div>
-              <div class="metadata-item" v-if="skill.file_count > 0">
+              <div v-if="skill.file_count > 0" class="metadata-item">
                 <span class="label">文件数</span>
                 <span class="value">{{ skill.file_count }}</span>
               </div>
@@ -152,8 +152,8 @@
             <button
               v-if="!isInstalled"
               class="btn btn-primary"
-              @click="handleInstall"
               :disabled="isInstalling"
+              @click="handleInstall"
             >
               <svg v-if="isInstalling" class="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 12a9 9 0 11-6.219-8.56" />
@@ -168,8 +168,8 @@
             <button
               v-else
               class="btn btn-danger"
-              @click="handleUninstall"
               :disabled="isUninstalling"
+              @click="handleUninstall"
             >
               <svg v-if="isUninstalling" class="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 12a9 9 0 11-6.219-8.56" />
@@ -188,7 +188,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref } from 'vue';
 import type { AnthropicSkill, InstallVerification } from '@/types';
 import { open as openExternal } from '@tauri-apps/plugin-shell';
 

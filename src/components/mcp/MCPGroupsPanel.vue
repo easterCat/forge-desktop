@@ -4,9 +4,9 @@
       <h4>Groups</h4>
       <button
         class="btn-icon"
-        @click="startCreating"
         title="Add Group"
         :disabled="isCreating"
+        @click="startCreating"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="12" y1="5" x2="12" y2="19"/>
@@ -33,9 +33,9 @@
         v-model="newGroupName"
         type="text"
         placeholder="Group name"
+        maxlength="32"
         @keyup.enter="handleCreate"
         @keyup.escape="cancelCreating"
-        maxlength="32"
       />
       <div class="color-picker">
         <button
@@ -84,8 +84,8 @@
           <div class="group-actions">
             <button
               class="action-btn"
-              @click.stop="startEditing(group)"
               title="Edit group"
+              @click.stop="startEditing(group)"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -94,8 +94,8 @@
             </button>
             <button
               class="action-btn"
-              @click.stop="$emit('toggle-visibility', group.id)"
               :title="group.isVisible ? 'Hide group' : 'Show group'"
+              @click.stop="$emit('toggle-visibility', group.id)"
             >
               <svg v-if="group.isVisible" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
@@ -108,8 +108,8 @@
             </button>
             <button
               class="action-btn danger"
-              @click.stop="handleDelete(group.id)"
               title="Delete group"
+              @click.stop="handleDelete(group.id)"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="3 6 5 6 21 6"/>
@@ -125,9 +125,9 @@
             v-model="editingGroupName"
             type="text"
             placeholder="Group name"
+            maxlength="32"
             @keyup.enter="saveEdit(group)"
             @keyup.escape="cancelEditing"
-            maxlength="32"
           />
           <div class="color-picker">
             <button

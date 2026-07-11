@@ -1,10 +1,8 @@
+use crate::commands_ext::CommandExt;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::Command;
 use thiserror::Error;
-
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 
 #[derive(Error, Debug)]
 pub enum InstallError {

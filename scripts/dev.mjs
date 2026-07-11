@@ -19,22 +19,16 @@ function killPortProcess(port) {
           console.log(`Killing existing process on port ${port} (PID: ${pid})...`);
           try {
             execSync(`taskkill /F /PID ${pid}`, { stdio: 'ignore' });
-          } catch (e) {
-            // Process might already be gone
-          }
+          } catch { /* process already gone */ }
         }
       }
     } else {
       // Unix/Mac: find and kill process using the port
       try {
         execSync(`lsof -ti:${port} | xargs kill -9 2>/dev/null || true`, { stdio: 'ignore' });
-      } catch (e) {
-        // No process found or already killed
-      }
+      } catch { /* no process found */ }
     }
-  } catch (e) {
-    // No process found on port, which is fine
-  }
+  } catch { /* port already free */ }
 }
 
 killPortProcess(1420);

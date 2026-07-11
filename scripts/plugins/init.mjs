@@ -10,7 +10,7 @@
 
 import { resolve, join } from 'path';
 import { existsSync, mkdirSync, writeFileSync, chmodSync } from 'fs';
-import { log, success, warn, error } from './utils.mjs';
+import { log, success, error } from './utils.mjs';
 
 const VALID_NAME = /^[a-z0-9-]+$/;
 

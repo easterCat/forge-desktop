@@ -10,7 +10,7 @@ interface Props {
   size?: number
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   bg: 'rgba(255, 255, 255, 0.30)',
   color: 'var(--accent)',
   size: 28,

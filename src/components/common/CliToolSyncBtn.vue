@@ -40,8 +40,6 @@
 <script setup lang="ts">
 import ToolIcon from '@/components/common/ToolIcon.vue';
 
-defineOptions({ name: 'CliToolSyncBtn' });
-
 withDefaults(defineProps<{
   /** The CLI tool key used to look up the brand icon. */
   toolKey: string;
@@ -68,6 +66,9 @@ withDefaults(defineProps<{
 const emit = defineEmits<{
   (e: 'click'): void;
 }>();
+
+defineOptions({ name: 'CliToolSyncBtn' });
+
 </script>
 
 <style scoped>

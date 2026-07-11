@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "license": "MIT",
   "bin": {
     "plugins": "scripts/plugins/index.mjs"
   },
@@ -15,15 +16,25 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix",
+    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts",
+    "lint:fix": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix",
+    "lint:errors": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --quiet",
+    "lint:diff": "eslint --no-eslintrc --config .eslintrc.json $(git diff --name-only --diff-filter=ACMR HEAD -- '*.{vue,ts,tsx,js,mjs,cjs}') 2>/dev/null || true",
+    "format": "prettier --write \"src/**/*.{ts,vue,js,json,md}\" \"*.{md,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,vue,js,json,md}\" \"*.{md,json}\"",
+    "typecheck": "vue-tsc --noEmit",
     "plugins": "node scripts/plugins/index.mjs",
     "plugins:install": "node scripts/plugins/install.mjs",
     "plugins:uninstall": "node scripts/plugins/uninstall.mjs",
     "plugins:list": "node scripts/plugins/list.mjs",
     "plugins:init": "node scripts/plugins/init.mjs",
+    "cli-tools:windsurf-version": "node scripts/cli-tools/windsurf-version.mjs",
+    "cli-tools:windsurf-version:json": "node scripts/cli-tools/windsurf-version.mjs --json",
+    "cli-tools:windsurf-version:rust": "node scripts/cli-tools/windsurf-version.mjs --rust",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "verify": "npm run typecheck && npm run lint && npm run test"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.5.0",
@@ -39,17 +50,24 @@
   "devDependencies": {
     "@tauri-apps/cli": "^2.5.0",
     "@types/node": "^22.15.18",
+    "@typescript-eslint/eslint-plugin": "^8.18.0",
+    "@typescript-eslint/parser": "^8.18.0",
     "@vitejs/plugin-vue": "^5.2.3",
     "@vitest/coverage-v8": "^4.1.9",
     "@vue/test-utils": "^2.4.11",
     "@vue/tsconfig": "^0.7.0",
     "autoprefixer": "^10.4.21",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-vue": "^9.32.0",
     "jsdom": "^29.1.1",
     "postcss": "^8.5.3",
+    "prettier": "^3.4.2",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
     "vitest": "^4.1.9",
+    "vue-eslint-parser": "^9.4.3",
     "vue-tsc": "^2.2.12"
   }
 }

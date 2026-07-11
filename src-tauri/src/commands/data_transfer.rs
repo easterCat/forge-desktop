@@ -8,7 +8,7 @@ use crate::db::Database;
 /// Returns a JSON array of `{key, value, updated_at}` objects.
 #[tauri::command]
 pub async fn export_all_data(db: State<'_, Database>) -> Result<String, String> {
-    let kv = crate::db::KvStore::new(&db.conn);
+    let kv = crate::db::KvStore::new(db.conn.clone());
     kv.export_all()
 }
 
@@ -16,6 +16,6 @@ pub async fn export_all_data(db: State<'_, Database>) -> Result<String, String> 
 /// Returns the number of rows imported.
 #[tauri::command]
 pub async fn import_all_data(db: State<'_, Database>, json: String) -> Result<usize, String> {
-    let kv = crate::db::KvStore::new(&db.conn);
+    let kv = crate::db::KvStore::new(db.conn.clone());
     kv.import_all(&json)
 }

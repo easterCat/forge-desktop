@@ -3,7 +3,7 @@
     <!-- Filter Bar -->
     <div class="filter-bar">
       <div class="filter-group">
-        <select v-model="localFilters.action" @change="handleFilterChange" class="filter-select">
+        <select v-model="localFilters.action" class="filter-select" @change="handleFilterChange">
           <option value="">All Actions</option>
           <option value="create">Create</option>
           <option value="update">Update</option>
@@ -13,14 +13,14 @@
         </select>
 
         <input
-          type="text"
           v-model="localFilters.serviceName"
+          type="text"
           placeholder="Filter by service..."
-          @input="debouncedFilterChange"
           class="filter-input"
+          @input="debouncedFilterChange"
         />
 
-        <select v-model="localFilters.status" @change="handleFilterChange" class="filter-select">
+        <select v-model="localFilters.status" class="filter-select" @change="handleFilterChange">
           <option value="">All Status</option>
           <option value="success">Success</option>
           <option value="failure">Failure</option>
@@ -29,19 +29,19 @@
 
       <div class="filter-group">
         <input
-          type="date"
           v-model="localFilters.dateFrom"
-          @change="handleFilterChange"
+          type="date"
           class="filter-input filter-date"
           placeholder="From"
+          @change="handleFilterChange"
         />
 
         <input
-          type="date"
           v-model="localFilters.dateTo"
-          @change="handleFilterChange"
+          type="date"
           class="filter-input filter-date"
           placeholder="To"
+          @change="handleFilterChange"
         />
 
         <button class="btn btn-sm btn-secondary" @click="$emit('export', localFilters)">
@@ -186,7 +186,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import { debounce } from '@vueuse/core';
+import { useDebounceFn } from '@vueuse/core';
 import type { MCPAuditEntry, MCPAuditFilters } from '@/types';
 
 interface Props {
@@ -299,7 +299,8 @@ function handleFilterChange() {
   emit('filter-change', localFilters.value);
 }
 
-const debouncedFilterChange = debounce(handleFilterChange, 300);
+const handleFilterChangeDebounced = useDebounceFn(handleFilterChange, 300)
+const debouncedFilterChange = handleFilterChangeDebounced
 
 function handleSort(column: string) {
   if (sortColumn.value === column) {

@@ -25,7 +25,7 @@ export async function clone(repoUrl, branch = 'main', options = {}) {
   }
 
   // Extract owner from URL for directory naming
-  const ownerMatch = repoUrl.match(/github\.com\/([^\/]+)\/([^\/]+?)(?:\.git)?$/);
+  const ownerMatch = repoUrl.match(new RegExp('github\\.com/([^/]+)/([^/]+?)(?:\\.git)?$'));
   if (!ownerMatch) {
     throw new Error(`Invalid GitHub URL: ${repoUrl}`);
   }
@@ -140,7 +140,7 @@ export async function cloneSparse(repoUrl, branch = 'main') {
     mkdirSync(tmpPath, { recursive: true });
   }
 
-  const ownerMatch = repoUrl.match(/github\.com\/([^\/]+)\/([^\/]+?)(?:\.git)?$/);
+  const ownerMatch = repoUrl.match(new RegExp('github\\.com/([^/]+)/([^/]+?)(?:\\.git)?$'));
   if (!ownerMatch) {
     throw new Error(`Invalid GitHub URL: ${repoUrl}`);
   }

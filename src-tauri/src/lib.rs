@@ -1,6 +1,9 @@
 use tauri::Manager;
 
 pub mod commands;
+/// Cross-platform polyfill for `std::os::windows::process::CommandExt`.
+/// See module docs in `commands_ext.rs` for why this exists.
+pub mod commands_ext;
 pub mod db;
 pub mod models;
 pub mod services;
@@ -89,8 +92,7 @@ pub use commands::{
             ImportResult as AgentImportResult},
     backup::{create_backup, get_backups, restore_backup, delete_backup, get_backup_contents},
     file::{read_file, write_file, list_directory},
-    cli_tools::{get_cli_tools, check_cli_tool_status, check_all_cli_tools_status,
-                check_all_cli_tools_status_parallel, upgrade_cli_tool},
+    cli_tools::{get_cli_tools, check_cli_tool_status, check_all_cli_tools_status_parallel, upgrade_cli_tool},
     settings::{has_github_token, get_github_token_preview, set_github_token, clear_github_token},
     mcp_manager::{get_mcp_service_detail, invoke_mcp_tool, discover_mcp_service,
                   export_mcp_services, import_mcp_services, get_mcp_health_history,
@@ -158,9 +160,12 @@ pub fn run() {
             std::fs::create_dir_all(&app_data_dir).expect("Failed to create app data dir");
 
             let db_path = app_data_dir.join("forge.db");
+            // Open a single connection and share it between the global
+            // `KvStore` and the Tauri `AppState`. Two connections to the
+            // same SQLite file would race; one connection in WAL mode
+            // serialises correctly and supports concurrent readers.
             let db = Database::new(&db_path).expect("Failed to initialize database");
-            Database::set_global(db);  // moves db into OnceLock for KvStore access
-            let db = Database::new(&db_path).expect("Failed to initialize database");
+            let db = Database::set_global(db);
 
             app.manage(AppState { db });
 
@@ -179,10 +184,13 @@ pub fn run() {
             commands::software::update_software,
             // CLI Tools commands
             commands::cli_tools::get_cli_tools,
+            commands::cli_tools::get_allagents_cli_tools,
             commands::cli_tools::check_cli_tool_status,
-            commands::cli_tools::check_all_cli_tools_status,
             commands::cli_tools::check_all_cli_tools_status_parallel,
             commands::cli_tools::upgrade_cli_tool,
+            commands::cli_tools::add_custom_cli_tool,
+            commands::cli_tools::remove_custom_cli_tool,
+            commands::cli_tools::list_custom_cli_tools,
             // Settings commands
             commands::settings::has_github_token,
             commands::settings::get_github_token_preview,
@@ -223,6 +231,7 @@ pub fn run() {
             crate::commands::installed_registry::update_plugin_inuse_cmd,
             crate::commands::installed_registry::sweep_inuse_cmd,
             // Plugin Sync commands
+            crate::commands::plugin_sync::get_supported_cli_tools,
             crate::commands::plugin_sync::sync_plugin_to_cli_tool,
             crate::commands::plugin_sync::unsync_plugin_from_cli_tool,
             crate::commands::plugin_sync::get_plugin_sync_status,

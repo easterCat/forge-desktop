@@ -1,4 +1,4 @@
-// Shared utility functions for the Forge backend
+//! Cross-cutting utilities used by multiple command modules.
 
 /// Returns the current UTC timestamp as an RFC3339 string.
 pub fn now_rfc3339() -> String {
@@ -12,3 +12,7 @@ pub fn future_rfc3339(offset_secs: i64) -> String {
         .unwrap_or_else(chrono::Utc::now)
         .to_rfc3339()
 }
+
+pub mod path_guard;
+
+pub use path_guard::{PathGuard, PathGuardError};

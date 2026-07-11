@@ -8,9 +8,7 @@ import type {
   MarketplaceSkill,
   PaginatedSkills,
   SyncTarget,
-  SyncConfig,
   MarketplaceInstallProgress,
-  CategoryKey,
 } from '@/types';
 
 export const useSkillMarketplaceStore = defineStore('skillMarketplace', () => {
@@ -239,22 +237,14 @@ export const useSkillMarketplaceStore = defineStore('skillMarketplace', () => {
   }
   
   async function addSyncTarget(target: SyncTarget) {
-    try {
-      const newTarget = await invoke<SyncTarget>('add_sync_target', { target });
-      syncTargets.value.push(newTarget);
-      return newTarget;
-    } catch (e) {
-      throw e;
-    }
+    const newTarget = await invoke<SyncTarget>('add_sync_target', { target });
+    syncTargets.value.push(newTarget);
+    return newTarget;
   }
-  
+
   async function removeSyncTarget(targetId: string) {
-    try {
-      await invoke('remove_sync_target', { targetId });
-      syncTargets.value = syncTargets.value.filter(t => t.id !== targetId);
-    } catch (e) {
-      throw e;
-    }
+    await invoke('remove_sync_target', { targetId });
+    syncTargets.value = syncTargets.value.filter(t => t.id !== targetId);
   }
   
   function getInstallProgress(skillId: string): MarketplaceInstallProgress | undefined {

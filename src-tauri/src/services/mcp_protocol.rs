@@ -1,10 +1,98 @@
 // FEAT-022: MCP Protocol Handlers
-// Implements STDIO and HTTP protocol handlers for MCP server communication
+// Implements STDIO and HTTP protocol handlers for MCP server communication.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::process::Stdio;
 use std::time::Duration;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::process::Command as TokioCommand;
+use tokio::time::timeout;
+
+/// Default timeout for an MCP stdio request (server startup + RPC round-trip).
+const STDIO_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Cap on the cumulative bytes read from a single MCP server. Protects
+/// against an unbounded response buffer being held in memory.
+const STDIO_MAX_RESPONSE_BYTES: usize = 16 * 1024 * 1024; // 16 MiB
+
+/// Validate that an MCP HTTP endpoint does not target loopback, link-local,
+/// or otherwise private / metadata network ranges. Returns `Ok(())` for
+/// publicly routable hosts, `Err(message)` otherwise.
+///
+/// This is a defence-in-depth measure: even if a user adds a service
+/// pointing at an internal address, we reject it unless the user explicitly
+/// opts in via the endpoint's query string `?allow_internal=1`.
+pub fn validate_http_endpoint(endpoint: &str) -> Result<(), String> {
+    use std::net::IpAddr;
+
+    let url = url::Url::parse(endpoint).map_err(|e| format!("Invalid URL: {}", e))?;
+
+    let scheme = url.scheme();
+    if scheme != "http" && scheme != "https" {
+        return Err(format!("Unsupported scheme '{}' (use http or https)", scheme));
+    }
+
+    // Allow callers to explicitly opt in to private addresses.
+    if url
+        .query_pairs()
+        .any(|(k, v)| k == "allow_internal" && v == "1")
+    {
+        return Ok(());
+    }
+
+    let host = url
+        .host_str()
+        .ok_or_else(|| "URL has no host".to_string())?;
+
+    // Reject literal addresses; if the host is an IP, check its range.
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        if is_private_or_loopback_ip(&ip) {
+            return Err(format!(
+                "Refusing to connect to private/loopback IP {}; \
+                 append ?allow_internal=1 to opt in",
+                ip
+            ));
+        }
+        return Ok(());
+    }
+
+    // For hostnames, refuse the well-known metadata hostnames outright.
+    let lower = host.to_ascii_lowercase();
+    if lower == "metadata.google.internal"
+        || lower == "metadata.goog"
+        || lower == "kubernetes.default.svc"
+        || lower.ends_with(".internal")
+    {
+        return Err(format!("Refusing to connect to internal host '{}'", host));
+    }
+
+    Ok(())
+}
+
+/// Returns true if `ip` is loopback, private, link-local, multicast, or
+/// otherwise not safe to contact from a user-supplied config.
+fn is_private_or_loopback_ip(ip: &std::net::IpAddr) -> bool {
+    use std::net::IpAddr::*;
+    match ip {
+        V4(v4) => {
+            v4.is_loopback()            // 127.0.0.0/8
+            || v4.is_private()          // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+            || v4.is_link_local()        // 169.254.0.0/16
+            || v4.is_multicast()         // 224.0.0.0/4
+            || v4.is_unspecified()       // 0.0.0.0
+            || v4.octets()[0] == 100 && (v4.octets()[1] & 0xC0) == 64 // 100.64.0.0/10 (CGNAT)
+        }
+        V6(v6) => {
+            v6.is_loopback()            // ::1
+            || v6.is_unspecified()       // ::
+            || v6.segments()[0] == 0xfe80 // fe80::/10 link-local
+            || (v6.segments()[0] & 0xfe00) == 0xfc00 // fc00::/7 unique-local
+            || (v6.segments()[0] & 0xff00) == 0xff00 // ff00::/8 multicast
+        }
+    }
+}
 
 /// MCP Server Configuration
 #[derive(Debug, Clone)]
@@ -144,8 +232,8 @@ impl StdioHandler {
 
         let prompts = parse_prompts_list(&prompts_response);
 
-        let now = chrono_lite_now();
-        let expires_at = chrono_lite_future(300); // 5 minutes TTL
+        let now = crate::utils::now_rfc3339();
+        let expires_at = crate::utils::future_rfc3339(300); // 5 minutes TTL
 
         Ok(DiscoveryCache {
             tools,
@@ -216,7 +304,19 @@ impl StdioHandler {
         }
     }
 
-    /// Send a JSON-RPC request to the STDIO server
+    /// Send a JSON-RPC request to the STDIO server.
+    ///
+    /// The MCP server is spawned as a child process with `stdin`, `stdout`,
+    /// and `stderr` piped. We:
+    /// 1. Spawn the server with `kill_on_drop(true)` so a timeout or panic
+    ///    does not leak a zombie process.
+    /// 2. Write a single newline-delimited JSON-RPC request to stdin and
+    ///    close stdin (signals EOF to the server).
+    /// 3. Read stdout line by line, collecting JSON-RPC frames until we
+    ///    find one whose `id` matches our request id (notifications arrive
+    ///    on the same stream and must be skipped).
+    /// 4. Bound the read by both a wall-clock timeout and a cumulative
+    ///    byte cap to protect against malicious / buggy servers.
     async fn send_request(
         &self,
         method: &str,
@@ -231,36 +331,91 @@ impl StdioHandler {
             "params": params
         });
 
-        let request_json = serde_json::to_string(&request)
+        let request_line = serde_json::to_string(&request)
             .map_err(|e| format!("Failed to serialize request: {}", e))?;
-        let _ = request_json;
 
-        // Parse endpoint to get command and args
+        // Parse endpoint to get command and args.
         let (command, args, env_vars) = parse_endpoint(&self.config.endpoint)?;
 
-        let output = tokio::process::Command::new(&command)
+        // Spawn the server. `kill_on_drop` guarantees the process is
+        // terminated if we exit early (timeout, panic, error).
+        let mut child = TokioCommand::new(&command)
             .args(&args)
             .envs(env_vars)
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .output()
-            .await
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
             .map_err(|e| format!("Failed to spawn MCP server '{}': {}", command, e))?;
 
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
+        // Write the request to stdin and close it. Doing this in a
+        // detached task means a slow / blocked server cannot deadlock
+        // the read below — closing stdin signals "no more input" to the
+        // server, allowing it to flush its response and exit cleanly.
+        if let Some(mut stdin) = child.stdin.take() {
+            let payload = format!("{}\n", request_line);
+            tokio::spawn(async move {
+                let _ = stdin.write_all(payload.as_bytes()).await;
+                // Implicit drop closes stdin when the task ends.
+            });
+        } else {
+            // Without stdin we cannot deliver the request — terminate.
+            let _ = child.kill().await;
+            return Err("MCP server child has no stdin pipe".to_string());
+        }
 
-        // Parse response - look for JSON-RPC response with matching id
-        for line in stdout.lines() {
-            let trimmed = line.trim();
-            if trimmed.is_empty() {
-                continue;
-            }
+        // Take stdout for line-buffered reading. The MCP server may emit
+        // any number of `notifications/*` frames before our response;
+        // skip them and only return when we see our `id`.
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| "MCP server child has no stdout pipe".to_string())?;
+        let stderr = child.stderr.take();
 
-            if let Ok(response) = serde_json::from_str::<serde_json::Value>(trimmed) {
-                // Check for JSON-RPC error
-                if let Some(error) = response.get("error") {
+        let mut reader = BufReader::new(stdout);
+        let id_for_match = request_id.clone();
+
+        let outcome = timeout(STDIO_REQUEST_TIMEOUT, async {
+            let mut buf = String::new();
+            let mut total_bytes = 0usize;
+
+            loop {
+                buf.clear();
+                let n = reader
+                    .read_line(&mut buf)
+                    .await
+                    .map_err(|e| format!("Failed to read from MCP server: {}", e))?;
+                if n == 0 {
+                    // EOF: server closed without sending our response.
+                    return Err("MCP server closed stdout before responding".to_string());
+                }
+                total_bytes += n;
+                if total_bytes > STDIO_MAX_RESPONSE_BYTES {
+                    return Err(format!(
+                        "MCP server response exceeded {} byte cap",
+                        STDIO_MAX_RESPONSE_BYTES
+                    ));
+                }
+
+                let trimmed = buf.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+
+                let frame: Value = match serde_json::from_str(trimmed) {
+                    Ok(v) => v,
+                    Err(_) => continue, // not JSON or truncated frame — skip
+                };
+
+                // Notifications carry no `id`; ignore them.
+                let frame_id = frame.get("id").and_then(|v| v.as_str());
+                if frame_id.map(|s| s != id_for_match).unwrap_or(true) {
+                    continue;
+                }
+
+                if let Some(error) = frame.get("error") {
                     let err_msg = error
                         .as_object()
                         .and_then(|o| o.get("message"))
@@ -269,18 +424,37 @@ impl StdioHandler {
                     return Err(format!("MCP server error: {}", err_msg));
                 }
 
-                // Return result if present
-                if let Some(result) = response.get("result") {
+                if let Some(result) = frame.get("result") {
                     return Ok(result.clone());
                 }
+                // Frame matched our id but has neither result nor error —
+                // treat as protocol violation.
+                return Err("MCP server returned frame with no result/error".to_string());
             }
-        }
+        })
+        .await;
 
-        if !stderr.trim().is_empty() {
-            return Err(format!("MCP server stderr: {}", stderr.trim()));
-        }
+        // Whether or not we succeeded, try to wait the child cleanly so we
+        // don't leak resources. `kill_on_drop` is the safety net.
+        let _ = child.start_kill();
 
-        Err("No valid JSON-RPC response received from MCP server".to_string())
+        match outcome {
+            Ok(Ok(value)) => Ok(value),
+            Ok(Err(e)) => {
+                if let Some(mut err) = stderr {
+                    let mut buf = String::new();
+                    let _ = tokio::io::AsyncReadExt::read_to_string(&mut err, &mut buf).await;
+                    if !buf.trim().is_empty() {
+                        return Err(format!("{} (stderr: {})", e, buf.trim()));
+                    }
+                }
+                Err(e)
+            }
+            Err(_) => Err(format!(
+                "MCP server timed out after {}s",
+                STDIO_REQUEST_TIMEOUT.as_secs()
+            )),
+        }
     }
 }
 
@@ -293,13 +467,14 @@ pub struct HttpHandler {
 }
 
 impl HttpHandler {
-    pub fn new(config: MCPServiceConfig) -> Self {
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(30))
-            .build()
-            .unwrap_or_default();
-
-        Self { config, client }
+    /// Construct a handler. Returns `Err` if the endpoint is rejected by
+    /// the SSRF guard (private / loopback / metadata addresses).
+    pub fn new(config: MCPServiceConfig) -> Result<Self, String> {
+        validate_http_endpoint(&config.endpoint)?;
+        Ok(Self {
+            config,
+            client: shared_http_client(),
+        })
     }
 
     /// Discover available tools, resources, and prompts from the HTTP MCP server
@@ -309,8 +484,8 @@ impl HttpHandler {
         let resources = self.discover_resources().await.unwrap_or_default();
         let prompts = self.discover_prompts().await.unwrap_or_default();
 
-        let now = chrono_lite_now();
-        let expires_at = chrono_lite_future(300); // 5 minutes TTL
+        let now = crate::utils::now_rfc3339();
+        let expires_at = crate::utils::future_rfc3339(300); // 5 minutes TTL
 
         Ok(DiscoveryCache {
             tools,
@@ -527,6 +702,23 @@ impl HttpHandler {
 
 // ==================== Protocol Router ====================
 
+/// Process-wide shared `reqwest::Client`. Building a client is expensive
+/// (TLS config, connection pool, DNS resolver) and we may construct many
+/// short-lived handlers per second; share a single instance instead.
+pub fn shared_http_client() -> reqwest::Client {
+    use std::sync::OnceLock;
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .timeout(Duration::from_secs(30))
+                .user_agent("forge-desktop/0.1")
+                .build()
+                .unwrap_or_default()
+        })
+        .clone()
+}
+
 /// Route to the appropriate handler based on protocol
 pub async fn probe_service(service: &crate::models::McpService) -> Result<HealthCheckResult, String> {
     let config = MCPServiceConfig {
@@ -540,7 +732,10 @@ pub async fn probe_service(service: &crate::models::McpService) -> Result<Health
 
     match config.protocol.as_str() {
         "stdio" => Ok(StdioHandler::new(config).health_check().await),
-        "http" | "sse" | _ => Ok(HttpHandler::new(config).health_check().await),
+        "http" | "sse" | _ => {
+            let handler = HttpHandler::new(config)?;
+            Ok(handler.health_check().await)
+        }
     }
 }
 
@@ -671,11 +866,3 @@ fn parse_call_response(response: &Value) -> Vec<MCPContentBlock> {
 }
 
 // ==================== Timestamp Utilities ====================
-
-fn chrono_lite_now() -> String {
-    crate::utils::now_rfc3339()
-}
-
-fn chrono_lite_future(seconds: u64) -> String {
-    crate::utils::future_rfc3339(seconds as i64)
-}

@@ -13,7 +13,7 @@ interface Props {
   showSearch?: boolean
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   searchPlaceholder: 'Search…',
   searchModelValue: '',
   selectOptions: () => [],

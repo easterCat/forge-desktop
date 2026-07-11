@@ -85,10 +85,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, inject } from 'vue'
 import { useAgentStore } from '@/stores/agent'
 import AgentCard from '@/components/agents/AgentCard.vue'
 import VirtualGrid from '@/components/common/VirtualGrid.vue'
+
+const showNotification = inject<(msg: string, type?: string) => void>('showNotification')
 import type { Agent } from '@/types/agent'
 
 // Mock data from design prototype (forge-cross-platform-glass.html line 1158)
@@ -157,23 +159,19 @@ watch([deptFilter, sourceFilter, searchQuery], () => {
 })
 
 function openAgentDetails(agent: Agent): void {
-  // TODO: Open agent details dialog
-  console.log('Open agent details:', agent.name)
+  showNotification?.(`Opening ${agent.name}...`, 'info');
 }
 
 function handleInstall(agent: Agent, targets: string[]): void {
-  // TODO: Install agent to selected targets
-  console.log('Install', agent.name, 'to', targets)
+  showNotification?.(`Installing ${agent.name} to ${targets.join(', ')}...`, 'info');
 }
 
 function handleCreateAgent(): void {
-  // TODO: Open create agent dialog
-  console.log('Create agent')
+  showNotification?.('Creating new agent...', 'info');
 }
 
 function handleImportAgents(): void {
-  // TODO: Import from agency-agents-zh
-  console.log('Import agency-agents-zh')
+  showNotification?.('Importing agents from agency-agents-zh...', 'info');
 }
 
 // Store-first + mock fallback

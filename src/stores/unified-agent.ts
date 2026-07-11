@@ -9,11 +9,10 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type {
-  UnifiedPlugin,
   SyncTarget,
   ClientType,
 } from '@/types/unified-plugin';
-import { SUPPORTED_CLIENTS } from '@/types/unified-plugin';
+
 
 // ============================================================================
 // Agent 类型 (保留现有接口)
@@ -160,7 +159,7 @@ export const useUnifiedAgentStore = defineStore('unified-agent', () => {
     error.value = null;
 
     try {
-      const result = await invoke<{ success: boolean; data?: any; error?: string }>(
+      const result = await invoke<{ success: boolean; data?: Agent[]; error?: string }>(
         'get_agents',
         { department: department || null }
       );
@@ -351,7 +350,7 @@ export const useUnifiedAgentStore = defineStore('unified-agent', () => {
     error.value = null;
 
     try {
-      const result = await invoke<{ success: boolean; data?: any; error?: string }>(
+      const result = await invoke<{ success: boolean; data?: unknown; error?: string }>(
         'allagents_update',
         {
           workspacePath: '',

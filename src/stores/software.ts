@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref, shallowRef } from 'vue';
+import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { Software } from '@/types';
 
@@ -27,6 +27,17 @@ export interface CliToolInfo {
   installMethods: { method: string; command: string; priority: number }[];
   npmPackage?: string;
   websiteUrl?: string;
+  color?: string;
+  installed?: boolean;
+  needsUpdate?: boolean;
+  pkg?: string;
+  desc?: string;
+  current?: string;
+  latest?: string;
+  /** Where this tool comes from: 'allagents' (23 tools) | 'custom' (user added) */
+  displaySource?: 'allagents' | 'custom';
+  /** If true, this tool requires manual download from website (no quick-install) */
+  manualDownloadOnly?: boolean;
 }
 
 export interface CliToolStatus {
@@ -71,6 +82,8 @@ export interface UpdateCheckResult {
 export const useSoftwareStore = defineStore('software', () => {
   const softwareList = ref<Software[]>([]);
   const cliTools = ref<CliToolInfo[]>([]);
+  /** Allagents 23 tools for the Default tab */
+  const allagentsTools = ref<CliToolInfo[]>([]);
   // Use shallowRef for Map to avoid deep reactivity tracking
   const cliToolStatuses = ref<Record<string, CliToolStatus>>({});
   const isLoading = ref(false);
@@ -139,9 +152,23 @@ export const useSoftwareStore = defineStore('software', () => {
       isLoading.value = true;
       error.value = null;
       debugLog('Fetching CLI tools from Rust...');
-      const result = await invoke<CliToolInfo[]>('get_cli_tools');
-      cliTools.value = result;
-      debugLog('Loaded', result.length, 'CLI tools');
+      // Fetch both lists in parallel: allagents 23 tools + all tools for custom tab filter
+      const [allagentsResult, allToolsResult] = await Promise.all([
+        invoke<CliToolInfo[]>('get_allagents_cli_tools'),
+        invoke<CliToolInfo[]>('get_cli_tools'),
+      ]);
+      allagentsTools.value = allagentsResult;
+      // Filter custom tools from the full list (displaySource === 'custom').
+      // Then de-duplicate by key as a defensive fallback: if the SQLite
+      // table ever contains two rows with the same key (e.g. a stale
+      // `mimo-code` row surviving a partial migration) we still only
+      // render one card in the Custom tab. The authoritative fix lives in
+      // the Rust migration in `db/connection.rs`; this is the UI belt.
+      const seen = new Set<string>();
+      cliTools.value = allToolsResult
+        .filter(t => t.displaySource === 'custom')
+        .filter(t => (seen.has(t.key) ? false : seen.add(t.key)));
+      debugLog('Loaded', allagentsResult.length, 'allagents tools,', cliTools.value.length, 'custom tools');
     } catch (e) {
       debugLog('Error:', e);
       error.value = e instanceof Error ? e.message : 'Failed to fetch CLI tools';
@@ -169,13 +196,24 @@ export const useSoftwareStore = defineStore('software', () => {
       // Use the parallel async version to avoid blocking the main thread
       // This executes all tool checks concurrently instead of sequentially
       const result = await invoke<CliToolStatus[]>('check_all_cli_tools_status_parallel');
-      // Batch update: build new Record, then assign once to trigger single reactive update
-      const next: Record<string, CliToolStatus> = {};
+      // Merge into the existing map instead of replacing it. The Rust
+      // command can return an empty list (or one with empty `toolKey`
+      // entries) when the parallel 60s timeout fires — in that case the
+      // previous per-tool statuses are still valid and we must not blank
+      // them, otherwise the UI flips every card from "Installed" to
+      // "Not installed" until the user manually re-checks.
+      const next: Record<string, CliToolStatus> = { ...cliToolStatuses.value };
+      let updated = 0;
       for (const status of result) {
+        // Drop empty `toolKey` sentinels emitted by the Rust fallback
+        // (`CliToolStatus { tool_key: String::new(), ... }`); they would
+        // otherwise be written under the literal "" key.
+        if (!status.toolKey) continue;
         next[status.toolKey] = status;
+        updated += 1;
       }
       cliToolStatuses.value = next;
-      debugLog('Status check complete:', result.length, 'tools');
+      debugLog('Status check complete:', updated, 'updated,', result.length, 'received');
     } catch (e) {
       debugLog('Failed:', e);
       error.value = e instanceof Error ? e.message : 'Failed to check all tools status';
@@ -292,6 +330,55 @@ export const useSoftwareStore = defineStore('software', () => {
     return softwareList.value.find(s => s.id === id);
   }
 
+  async function addCustomCliTool(config: {
+    key: string;
+    name: string;
+    installMethod: string;
+    installCommand: string;
+    detectCommand: string;
+    websiteUrl?: string;
+    pluginDir?: string;
+  }) {
+    try {
+      isLoading.value = true;
+      error.value = null;
+      // Guard against duplicate keys at the store level. The Rust `add_custom_cli_tool`
+      // command does not currently enforce uniqueness, so without this check a user
+      // could end up with two rows (and therefore two cards) sharing the same key —
+      // which is the bug that produced two MiMo Code cards in the Custom tab.
+      const existing = [
+        ...allagentsTools.value,
+        ...cliTools.value,
+      ].find(t => t.key === config.key);
+      if (existing) {
+        const msg = `Tool "${config.key}" already exists (${existing.name})`;
+        error.value = msg;
+        throw new Error(msg);
+      }
+      await invoke('add_custom_cli_tool', { config });
+      await fetchCliTools();
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to add custom tool';
+      throw e;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  async function removeCustomCliTool(key: string) {
+    try {
+      isLoading.value = true;
+      error.value = null;
+      await invoke('remove_custom_cli_tool', { key });
+      await fetchCliTools();
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to remove custom tool';
+      throw e;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
   function getSoftwareByKey(key: string): Software | undefined {
     return softwareList.value.find(s => s.key === key);
   }
@@ -324,6 +411,7 @@ export const useSoftwareStore = defineStore('software', () => {
   return {
     softwareList,
     cliTools,
+    allagentsTools,
     cliToolStatuses,
     isLoading,
     isCheckingStatus,
@@ -346,5 +434,7 @@ export const useSoftwareStore = defineStore('software', () => {
     selectedPlatform,
     setSelectedPlatform,
     updateSoftware,
+    addCustomCliTool,
+    removeCustomCliTool,
   };
 });

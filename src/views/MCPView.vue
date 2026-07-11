@@ -97,9 +97,9 @@
             </div>
             <div class="card-footer-right">
               <button class="btn btn-secondary btn-sm" @click="handleCheckHealth(server)">Check Health</button>
-              <DropdownMenu :model-value="openDropdown === server.name" @update:model-value="(v: boolean) => openDropdown = v ? server.name : null" :min-width="160">
+              <DropdownMenu :model-value="openDropdown === server.name" :min-width="160" @update:model-value="(v: boolean) => openDropdown = v ? server.name : null">
                 <template #trigger>
-                  <button class="btn-icon btn-sm" @click.stop="toggleDropdown(server.name)" aria-label="More actions">
+                  <button class="btn-icon btn-sm" aria-label="More actions" @click.stop="toggleDropdown(server.name)">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>
                     </svg>
@@ -198,18 +198,27 @@
 <script setup lang="ts">
 import { ref, computed, inject } from 'vue';
 import { useMCPStore } from '@/stores/mcp';
-import Badge from '@/components/common/Badge.vue';
 import DropdownMenu from '@/components/common/DropdownMenu.vue';
 import TabBar from '@/components/common/TabBar.vue';
 import { confirm } from '@/utils/dialog';
 
-// Use real store when backend API is ready
 const mcpStore = useMCPStore();
+const showNotification = inject<(message: string, type?: string) => void>('showNotification');
 
-const showNotification = inject<Function>('showNotification');
-
-// Mock servers data (from prototype)
-const mockServers = [
+// Mock data for first-run preview. The store is the source of truth at
+// runtime — `effectiveServers` falls back to this only when `mcpStore.services`
+// is empty, so first-time users see a populated list instead of an empty
+// page. Once any service is registered, the real data wins. Keep this list
+// tiny (3 entries) since it's just a placeholder, not a fixture.
+const mockServers: Array<{
+  name: string
+  endpoint: string
+  auth: string
+  healthy: boolean
+  tools: number
+  lastChecked: string
+  group?: string
+}> = [
   {
     name: 'git',
     endpoint: 'stdio://git-mcp',
@@ -217,6 +226,7 @@ const mockServers = [
     healthy: true,
     tools: 8,
     lastChecked: '1 min ago',
+    group: 'version-control',
   },
   {
     name: 'node_repl',
@@ -236,51 +246,42 @@ const mockServers = [
   },
 ];
 
-// Mock tools data
-const mockTools = [
-  { name: 'git_clone', server: 'git', description: 'Clone a repository' },
-  { name: 'git_status', server: 'git', description: 'Check git status' },
-  { name: 'git_commit', server: 'git', description: 'Create a commit' },
-  { name: 'git_push', server: 'git', description: 'Push changes' },
-  { name: 'git_pull', server: 'git', description: 'Pull changes' },
-  { name: 'git_branch', server: 'git', description: 'List branches' },
-  { name: 'git_log', server: 'git', description: 'View commit history' },
-  { name: 'git_diff', server: 'git', description: 'Show changes' },
-  { name: 'repl_eval', server: 'node_repl', description: 'Evaluate JavaScript' },
-  { name: 'repl_inspect', server: 'node_repl', description: 'Inspect variables' },
-  { name: 'repl_help', server: 'node_repl', description: 'Show help' },
-  { name: 'repl_clear', server: 'node_repl', description: 'Clear console' },
-  { name: 'repl_history', server: 'node_repl', description: 'Show history' },
-  { name: 'repl_load', server: 'node_repl', description: 'Load script' },
-  { name: 'mr_list', server: 'gitlab', description: 'List merge requests' },
-  { name: 'mr_create', server: 'gitlab', description: 'Create MR' },
-  { name: 'mr_merge', server: 'gitlab', description: 'Merge MR' },
-  { name: 'issue_list', server: 'gitlab', description: 'List issues' },
-  { name: 'issue_create', server: 'gitlab', description: 'Create issue' },
-  { name: 'pipeline_list', server: 'gitlab', description: 'List pipelines' },
-  { name: 'pipeline_run', server: 'gitlab', description: 'Run pipeline' },
-  { name: 'snippet_create', server: 'gitlab', description: 'Create snippet' },
-  { name: 'snippet_list', server: 'gitlab', description: 'List snippets' },
-  { name: 'project_search', server: 'gitlab', description: 'Search projects' },
-  { name: 'user_info', server: 'gitlab', description: 'Get user info' },
-];
-
-// State
-const servers = ref(mockServers);
+// State — use store data with mock fallback
 const activeTab = ref('services');
 const searchQuery = ref('');
 const healthFilter = ref('all');
 const authFilter = ref('all');
 
-const tabItems = [
-  { id: 'services', label: 'Services', count: servers.value.length },
+// Use store data when available; fall back to the first-run preview list
+// only when the user has not registered any services yet.
+const effectiveServers = computed(() => {
+  return mcpStore.services.length > 0
+    ? mcpStore.services.map(s => ({
+        name: s.name,
+        endpoint: s.endpoint,
+        auth: s.authType,
+        healthy: s.healthStatus === 'online',
+        tools: 0,
+        lastChecked: new Date(s.updatedAt).toLocaleString(),
+        group: s.groupId || undefined,
+      }))
+    : mockServers;
+});
+
+// Template-level alias: `servers` was a `ref(mockServers)` that didn't
+// reflect the store. Route every read through `effectiveServers` so the
+// header count and the groups preview stay in sync with the store.
+const servers = effectiveServers;
+
+const tabItems = computed(() => [
+  { id: 'services', label: 'Services', count: effectiveServers.value.length },
   { id: 'groups', label: 'Groups' },
   { id: 'audit', label: 'Audit Log' },
-]
+]);
 
 // Computed
 const filteredServers = computed(() => {
-  return servers.value.filter((s) => {
+  return effectiveServers.value.filter((s) => {
     const matchesSearch =
       !searchQuery.value ||
       s.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
@@ -295,26 +296,7 @@ const filteredServers = computed(() => {
   });
 });
 
-const connectedServers = computed(() => servers.value.filter((s) => s.healthy).length);
-const totalTools = computed(() => servers.value.reduce((sum, s) => sum + s.tools, 0));
-const recentErrors = computed(() => servers.value.filter((s) => !s.healthy).length);
-
-const availableTools = computed(() => {
-  if (!searchQuery.value) return mockTools;
-  const q = searchQuery.value.toLowerCase();
-  return mockTools.filter(
-    (t) =>
-      t.name.toLowerCase().includes(q) ||
-      t.server.toLowerCase().includes(q) ||
-      t.description.toLowerCase().includes(q)
-  );
-});
-
 // Handlers
-function handleRefresh() {
-  if (showNotification) showNotification('Discovering MCP services...', 'info');
-}
-
 function handleDiscover() {
   if (showNotification) showNotification('Discovering MCP services...', 'info');
 }
@@ -357,11 +339,6 @@ function handleSearch() {
 
 function handleFilter() {
   // Filter is reactive via v-model, filtering happens in computed
-}
-
-function handleConfigure(server: (typeof mockServers)[number]) {
-  openDropdown.value = null
-  if (showNotification) showNotification(`Configure ${server.name}`, 'info')
 }
 </script>
 

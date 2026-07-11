@@ -40,7 +40,7 @@
       <button class="btn btn-detail btn-sm" @click.stop="$emit('detail', skill)">
         详情
       </button>
-      <button class="btn btn-secondary btn-sm" @click.stop="$emit('copy', skill)" title="复制安装命令">
+      <button class="btn btn-secondary btn-sm" title="复制安装命令" @click.stop="$emit('copy', skill)">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
           <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
@@ -48,8 +48,8 @@
       </button>
       <button
         class="btn btn-primary btn-sm"
-        @click.stop="$emit('install', skill)"
         :disabled="!skill.installUrl"
+        @click.stop="$emit('install', skill)"
       >
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
@@ -65,7 +65,7 @@
 <script setup lang="ts">
 import type { SkillsShSkill } from '@/types';
 
-const props = defineProps<{
+defineProps<{
   skill: SkillsShSkill;
 }>();
 

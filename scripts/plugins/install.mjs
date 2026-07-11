@@ -14,14 +14,13 @@ import {
   inferSourceName,
   getPath,
   ensureDir,
-  exec,
   info,
   success,
   warn,
 } from './utils.mjs';
 import { clone, cloneSparse, cleanupTempDir, isGitAvailable } from './git.mjs';
 import { scanForPlugins } from './scanner.mjs';
-import { addPlugins, loadManifest } from './manifest.mjs';
+import { addPlugins } from './manifest.mjs';
 import { existsSync, rmSync, cpSync } from 'fs';
 import { join } from 'path';
 
@@ -155,7 +154,6 @@ export async function run(args) {
       for (const plugin of plugins) {
         const sourceDir = findPluginSourceDir(tmpRepoDir, plugin.name);
         if (sourceDir) {
-          const destDir = getPath('plugins', sourceName, plugin.name);
           ensureDir(getPath('plugins', sourceName));
 
           if (copyPluginToLocal(sourceDir, sourceName, plugin.name)) {
@@ -258,9 +256,11 @@ function parseArgs(args) {
         options.all = true;
         break;
       case '--help':
+      /* falls through */
       case '-h':
         printHelp();
         process.exit(0);
+        break;
       default:
         if (!arg.startsWith('-')) {
           options.repoUrl = arg;

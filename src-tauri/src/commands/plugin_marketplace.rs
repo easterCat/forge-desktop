@@ -63,7 +63,6 @@ pub async fn get_marketplace_plugins() -> Result<Vec<MarketplacePlugin>, String>
 #[tauri::command]
 pub async fn install_marketplace_plugin(
     plugin: MarketplacePlugin,
-    _source_command: String,
 ) -> Result<PluginInstallResult, String> {
     log::info!(
         "Installing plugin '{}' from source '{}'",
@@ -88,7 +87,6 @@ pub async fn uninstall_marketplace_plugin(
 #[tauri::command]
 pub async fn update_marketplace_plugin(
     plugin: MarketplacePlugin,
-    _source_command: String,
 ) -> Result<PluginUpdateResult, String> {
     log::info!("Updating plugin '{}'", plugin.name);
     let dir = plugin_marketplace::plugins_dir();
@@ -236,6 +234,16 @@ pub async fn add_user_marketplace_source(
     if source.command.trim().is_empty() {
         return Err("Source command (repo URL) is required".to_string());
     }
+    if !is_valid_source_id(&source.id) {
+        return Err(
+            "Source id must contain only letters, digits, '.', '-', or '_'".to_string(),
+        );
+    }
+
+    // SECURITY: only allow https://github.com/<owner>/<repo> URLs and
+    // reject anything that could be smuggled into a shell / git command.
+    plugin_marketplace::validate_github_url(&source.command)
+        .map_err(|e| format!("Invalid source URL: {}", e))?;
 
     let mut current = plugin_marketplace::read_user_sources();
 
@@ -264,6 +272,16 @@ pub async fn add_user_marketplace_source(
     current.push(source.clone());
     plugin_marketplace::write_user_sources(&current)?;
     Ok(source)
+}
+
+/// Allow only safe characters in a user-supplied source id so it cannot
+/// be used as a path-traversal vector.
+fn is_valid_source_id(id: &str) -> bool {
+    let len = id.len();
+    (1..=100).contains(&len)
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_')
 }
 
 /// Remove a user-added source by id. Returns the removed source so the

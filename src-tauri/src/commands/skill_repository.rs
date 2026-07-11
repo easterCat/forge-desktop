@@ -62,7 +62,7 @@ fn ensure_config_dir() -> std::io::Result<PathBuf> {
 /// Load repositories from KvStore (with JSON file fallback)
 fn load_repositories() -> Result<Vec<SkillRepository>, String> {
     if let Some(db) = crate::db::Database::global() {
-        let kv = crate::db::KvStore::new(&db.conn);
+        let kv = crate::db::KvStore::new(db.conn.clone());
         if let Some(data) = kv.get::<serde_json::Value>("skill_repositories") {
             let repos = data.get("repositories")
                 .and_then(|r| r.as_array())
@@ -99,7 +99,7 @@ fn load_repositories() -> Result<Vec<SkillRepository>, String> {
 /// Save repositories to KvStore (with JSON file fallback)
 fn save_repositories(repos: &[SkillRepository]) -> Result<(), String> {
     if let Some(db) = crate::db::Database::global() {
-        let kv = crate::db::KvStore::new(&db.conn);
+        let kv = crate::db::KvStore::new(db.conn.clone());
         let data = serde_json::json!({
             "version": "1.0",
             "repositories": repos

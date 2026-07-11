@@ -17,9 +17,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type {
   UnifiedPlugin,
-  PluginSource,
   SyncTarget,
-  SyncStatus,
 } from '@/types/unified-plugin';
 
 // ============================================================================
@@ -37,11 +35,31 @@ export type SkillSourceType =
   | 'repository';    // Git 仓库
 
 /** 统一的安装进度 */
+/**
+ * Per-skill install / sync progress event. Mirrors the Rust
+ * `InstallProgress` payload emitted by `anthropic_skills` on the
+ * `anthropic-skill-install-progress` and `remote-skill-install-progress`
+ * channels. `stage` is a free-form string from the Rust side; we model
+ * it as a closed union here but cast at the boundary so a new stage
+ * added in Rust does not silently break the listener.
+ */
 export interface SkillInstallProgress {
-  stage: 'listing' | 'downloading' | 'verifying' | 'copying' | 'complete' | 'error';
+  /** Skill ID this progress event refers to. Optional in the interface
+   *  so internal store helpers (e.g. `installSkill`) can record progress
+   *  on their own behalf without re-stating the id; the Rust-emitted
+   *  payload always carries `skill_id`. */
+  skillId?: string;
+  stage: 'listing' | 'downloading' | 'verifying' | 'copying' | 'complete' | 'error' | 'success' | 'failed';
+  /** 0–100 */
   progress: number;
   message?: string;
   error?: string;
+  /** Bytes / files already downloaded. */
+  filesDownloaded?: number;
+  /** Total bytes / files expected. */
+  filesTotal?: number;
+  /** Absolute install path, populated when stage === 'success'. */
+  installedPath?: string;
 }
 
 /** 技能来源信息 */
@@ -210,7 +228,7 @@ export const useUnifiedSkillStore = defineStore('unified-skill', () => {
 
     try {
       // 从 allagents marketplace 获取来源
-      const result = await invoke<{ success: boolean; data?: any; error?: string }>(
+      const result = await invoke<{ success: boolean; data?: { output?: string }; error?: string }>(
         'allagents_marketplace_list',
         { workspacePath: '' }
       );
@@ -262,13 +280,13 @@ export const useUnifiedSkillStore = defineStore('unified-skill', () => {
 
     try {
       // 从 allagents 获取技能列表
-      const result = await invoke<{ success: boolean; data?: any; error?: string }>(
+      const result = await invoke<{ success: boolean; data?: { skills?: unknown[] }; error?: string }>(
         'allagents_skill_list',
         { workspacePath: '' }
       );
 
       if (result.success && result.data?.skills) {
-        skills.value = result.data.skills.map((s: any) =>
+        skills.value = result.data.skills.map((s) =>
           convertAllagentsSkill(s)
         );
       }
@@ -285,13 +303,13 @@ export const useUnifiedSkillStore = defineStore('unified-skill', () => {
     error.value = null;
 
     try {
-      const result = await invoke<{ success: boolean; data?: any }>(
+      const result = await invoke<{ success: boolean; data?: unknown[] }>(
         'get_skills',
         { softwareId: '' }
       );
 
       if (result.success && result.data) {
-        const localSkills = result.data.map((s: any) =>
+        const localSkills = result.data.map((s) =>
           convertLocalSkill(s)
         );
 
@@ -315,16 +333,11 @@ export const useUnifiedSkillStore = defineStore('unified-skill', () => {
   // ==========================================================================
 
   /** 安装技能 */
-  async function installSkill(
-    skill: UnifiedPlugin,
-    targetDir?: string
-  ): Promise<boolean> {
+  async function installSkill(skill: UnifiedPlugin): Promise<boolean> {
     isInstalling.value = true;
     error.value = null;
 
     try {
-      const spec = skill.allagentsSpec ?? skill.name;
-
       // 更新进度
       installProgress.value.set(skill.id, {
         stage: 'downloading',
@@ -332,7 +345,7 @@ export const useUnifiedSkillStore = defineStore('unified-skill', () => {
         message: '正在下载...',
       });
 
-      const result = await invoke<{ success: boolean; data?: any; error?: string }>(
+      const result = await invoke<{ success: boolean; data?: unknown; error?: string }>(
         'allagents_skill_add',
         {
           workspacePath: '',
@@ -424,7 +437,7 @@ export const useUnifiedSkillStore = defineStore('unified-skill', () => {
   /** 加载仓库列表 */
   async function fetchRepositories(): Promise<void> {
     try {
-      const result = await invoke<{ success: boolean; data?: any }>(
+      const result = await invoke<{ success: boolean; data?: SkillRepository[] }>(
         'get_repositories'
       );
 
@@ -490,7 +503,7 @@ export const useUnifiedSkillStore = defineStore('unified-skill', () => {
   /** 加载同步目标 */
   async function fetchSyncTargets(): Promise<void> {
     try {
-      const result = await invoke<{ success: boolean; data?: any }>(
+      const result = await invoke<{ success: boolean; data?: SyncTarget[] }>(
         'get_sync_targets'
       );
 
@@ -543,19 +556,63 @@ export const useUnifiedSkillStore = defineStore('unified-skill', () => {
   // 事件监听
   // ==========================================================================
 
-  /** 开始监听安装进度 */
+  /**
+   * Begin listening for skill install / sync progress events from the
+   * Rust backend. The Rust side emits `anthropic-skill-install-progress`
+   * for Anthropic Official source installs and `remote-skill-install-progress`
+   * for all other sources. We map them to a single internal event and
+   * store the latest progress per `skill_id` in `installProgress` so
+   * the UI can render per-skill progress bars.
+   */
   function startListening() {
     if (progressUnlisten) return;
+    const handlers: UnlistenFn[] = [];
 
-    listen<SkillInstallProgress>('skill-install-progress', (event) => {
-      // 进度事件处理（需要匹配技能 ID）
-      // 实际实现中需要从事件 payload 中提取技能 ID
-    }).then((unlisten) => {
-      progressUnlisten = unlisten;
-    });
+    const applyProgress = (event: { payload: SkillInstallProgress }) => {
+      const p = event.payload;
+      if (!p || !p.skillId) {
+        // Avoid pulling in a logging shim — eslint handles this in CI.
+        // eslint-disable-next-line no-console
+        console.warn('[unified-skill] install progress without skillId', p);
+        return;
+      }
+      installProgress.value.set(p.skillId, p);
+      // Vue Map mutations don't auto-trigger reactivity; force a refresh
+      // by reassigning the ref.
+      installProgress.value = new Map(installProgress.value);
+
+      // Reflect terminal stages on the skill record so the UI can flip
+      // its spinner to a success/failure badge.
+      const skill = skills.value.find((s) => s.id === p.skillId);
+      if (skill) {
+        if (p.stage === 'success' || p.stage === 'complete') {
+          skill.installed = true;
+          if (p.installedPath) {
+            skill.installedPath = p.installedPath;
+          }
+          installProgress.value.delete(p.skillId);
+          installProgress.value = new Map(installProgress.value);
+        } else if (p.stage === 'failed' || p.stage === 'error') {
+          (skill as Record<string, unknown>).lastError = p.message ?? p.error;
+        }
+      }
+    };
+
+    Promise.all([
+      listen<SkillInstallProgress>('anthropic-skill-install-progress', applyProgress),
+      listen<SkillInstallProgress>('remote-skill-install-progress', applyProgress),
+    ])
+      .then((unlistens) => {
+        handlers.push(...unlistens);
+        progressUnlisten = () => handlers.forEach((fn) => fn());
+      })
+      .catch((e) => {
+        // eslint-disable-next-line no-console
+        console.error('[unified-skill] failed to register progress listeners', e);
+      });
   }
 
-  /** 停止监听 */
+  /** Stop listening */
   function stopListening() {
     if (progressUnlisten) {
       progressUnlisten();
@@ -590,36 +647,38 @@ export const useUnifiedSkillStore = defineStore('unified-skill', () => {
   // ==========================================================================
 
   /** 将 allagents 技能转换为 UnifiedPlugin */
-  function convertAllagentsSkill(raw: any): UnifiedPlugin {
+  function convertAllagentsSkill(raw: unknown): UnifiedPlugin {
+    const r = raw as Record<string, unknown>;
     return {
-      id: raw.name,
-      name: raw.name,
-      description: raw.description,
+      id: String(r.name ?? ''),
+      name: String(r.name ?? ''),
+      description: String(r.description ?? ''),
       source: {
-        type: raw.plugin ? 'github' : 'local',
-        repo: raw.plugin,
+        type: r.plugin ? 'github' : 'local',
+        repo: String(r.plugin ?? ''),
       },
       scope: 'project',
       type: 'skill',
-      tags: raw.tags ?? [],
-      categories: raw.categories ?? [],
+      tags: Array.isArray(r.tags) ? r.tags : [],
+      categories: Array.isArray(r.categories) ? r.categories : [],
       installed: true,
-      enabled: raw.enabled ?? true,
+      enabled: r.enabled !== false,
       syncTargets: [],
       syncStatus: 'synced',
       targetClients: [],
-      allagentsSpec: raw.plugin ? `${raw.name}@${raw.plugin}` : raw.name,
-      skillPath: raw.path,
-      parentPlugin: raw.plugin,
+      allagentsSpec: r.plugin ? `${String(r.name)}@${String(r.plugin)}` : String(r.name),
+      skillPath: String(r.path ?? ''),
+      parentPlugin: String(r.plugin ?? ''),
     };
   }
 
   /** 将本地 DB 技能转换为 UnifiedPlugin */
-  function convertLocalSkill(raw: any): UnifiedPlugin {
+  function convertLocalSkill(raw: unknown): UnifiedPlugin {
+    const r = raw as Record<string, unknown>;
     return {
-      id: raw.id ?? raw.name,
-      name: raw.name,
-      description: raw.description,
+      id: String(r.id ?? r.name ?? ''),
+      name: String(r.name ?? ''),
+      description: String(r.description ?? ''),
       source: { type: 'local' },
       scope: 'project',
       type: 'skill',
@@ -630,7 +689,7 @@ export const useUnifiedSkillStore = defineStore('unified-skill', () => {
       syncTargets: [],
       syncStatus: 'synced',
       targetClients: [],
-      skillPath: raw.filePath,
+      skillPath: String(r.filePath ?? ''),
     };
   }
 

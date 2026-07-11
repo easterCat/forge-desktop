@@ -63,12 +63,6 @@ const isAllSelected = computed(() =>
   filteredClients.value.every(c => props.modelValue.includes(c))
 );
 
-// 部分选中状态
-const isPartiallySelected = computed(() =>
-  !isAllSelected.value &&
-  filteredClients.value.some(c => props.modelValue.includes(c))
-);
-
 // 判断是否为通用客户端
 function isUniversalClient(client: ClientType): boolean {
   const universalClients = [

@@ -2,6 +2,7 @@
 // Provides database operations for MCP health log, groups, service groups, and audit log
 
 use crate::db::Database;
+use crate::utils::now_rfc3339;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 
@@ -72,9 +73,9 @@ impl Database {
         latency_ms: Option<i64>,
         error_message: Option<&str>,
     ) -> Result<String, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let conn = self.lock_or_err()?;
         let id = uuid::Uuid::new_v4().to_string();
-        let checked_at = chrono_lite_now();
+        let checked_at = now_rfc3339();
 
         conn.execute(
             "INSERT INTO mcp_health_log (id, service_id, status, latency_ms, error_message, checked_at)
@@ -91,7 +92,7 @@ impl Database {
         service_id: &str,
         limit: Option<i32>,
     ) -> Result<Vec<HealthRecord>, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let conn = self.lock_or_err()?;
         let limit = limit.unwrap_or(50);
         let mut stmt = conn
             .prepare(
@@ -122,7 +123,7 @@ impl Database {
     }
 
     pub fn get_latest_health(&self, service_id: &str) -> Result<Option<HealthRecord>, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let conn = self.lock_or_err()?;
         let mut stmt = conn
             .prepare(
                 "SELECT id, service_id, status, latency_ms, error_message, checked_at
@@ -152,7 +153,7 @@ impl Database {
     // ==================== Groups Functions ====================
 
     pub fn get_groups(&self) -> Result<Vec<Group>, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let conn = self.lock_or_err()?;
         let mut stmt = conn
             .prepare(
                 "SELECT g.id, g.name, g.color, g.is_visible, g.created_at,
@@ -181,9 +182,9 @@ impl Database {
     }
 
     pub fn create_group(&self, name: &str, color: &str) -> Result<Group, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let conn = self.lock_or_err()?;
         let id = uuid::Uuid::new_v4().to_string();
-        let created_at = chrono_lite_now();
+        let created_at = now_rfc3339();
 
         conn.execute(
             "INSERT INTO mcp_groups (id, name, color, is_visible, created_at)
@@ -209,7 +210,7 @@ impl Database {
         color: Option<&str>,
         is_visible: Option<bool>,
     ) -> Result<Group, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let conn = self.lock_or_err()?;
 
         // Build dynamic update query
         let mut updates = Vec::new();
@@ -271,7 +272,7 @@ impl Database {
     }
 
     pub fn delete_group(&self, id: &str) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let conn = self.lock_or_err()?;
         conn.execute("DELETE FROM mcp_groups WHERE id = ?", params![id])
             .map_err(|e| e.to_string())?;
         Ok(())
@@ -280,7 +281,7 @@ impl Database {
     // ==================== Service Groups Functions ====================
 
     pub fn get_service_groups(&self, service_id: &str) -> Result<Vec<String>, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let conn = self.lock_or_err()?;
         let mut stmt = conn
             .prepare("SELECT group_id FROM mcp_service_groups WHERE service_id = ?1")
             .map_err(|e| e.to_string())?;
@@ -294,8 +295,61 @@ impl Database {
         Ok(groups)
     }
 
+    /// Batch variant of `get_service_groups`. Returns a `HashMap` keyed by
+    /// `service_id` so callers that need group membership for many services
+    /// (e.g. `export_mcp_services`) can do it in a single SQL query rather
+    /// than N+1 round-trips. Services that have no group membership map to
+    /// an empty `Vec`.
+    pub fn get_service_groups_batch(
+        &self,
+        service_ids: &[String],
+    ) -> Result<std::collections::HashMap<String, Vec<String>>, String> {
+        use std::collections::HashMap;
+        if service_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let conn = self.lock_or_err()?;
+
+        // Build the IN clause with the right number of `?` placeholders. We
+        // build `?1, ?2, ...` rather than building a string with the ids
+        // spliced in so the query stays parameterised and SQL-injection safe.
+        let placeholders: Vec<String> = (1..=service_ids.len()).map(|i| format!("?{}", i)).collect();
+        let sql = format!(
+            "SELECT service_id, group_id FROM mcp_service_groups WHERE service_id IN ({})",
+            placeholders.join(", ")
+        );
+
+        let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+        let params_iter: Vec<&dyn rusqlite::ToSql> = service_ids
+            .iter()
+            .map(|s| s as &dyn rusqlite::ToSql)
+            .collect();
+
+        let mut out: HashMap<String, Vec<String>> = HashMap::new();
+        // Pre-seed with empty vecs so callers can index unconditionally.
+        for id in service_ids {
+            out.entry(id.clone()).or_default();
+        }
+
+        let rows = stmt
+            .query_map(params_iter.as_slice(), |row| {
+                let svc: String = row.get(0)?;
+                let grp: String = row.get(1)?;
+                Ok((svc, grp))
+            })
+            .map_err(|e| e.to_string())?;
+
+        for row in rows {
+            let (svc, grp) = row.map_err(|e| e.to_string())?;
+            out.entry(svc).or_default().push(grp);
+        }
+
+        Ok(out)
+    }
+
     pub fn add_service_to_group(&self, service_id: &str, group_id: &str) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let conn = self.lock_or_err()?;
         conn.execute(
             "INSERT OR IGNORE INTO mcp_service_groups (service_id, group_id) VALUES (?1, ?2)",
             params![service_id, group_id],
@@ -305,7 +359,7 @@ impl Database {
     }
 
     pub fn remove_service_from_group(&self, service_id: &str, group_id: &str) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let conn = self.lock_or_err()?;
         conn.execute(
             "DELETE FROM mcp_service_groups WHERE service_id = ?1 AND group_id = ?2",
             params![service_id, group_id],
@@ -315,25 +369,44 @@ impl Database {
     }
 
     pub fn set_service_groups(&self, service_id: &str, group_ids: &[String]) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let conn = self.lock_or_err()?;
 
-        // Remove all existing associations
-        conn.execute(
-            "DELETE FROM mcp_service_groups WHERE service_id = ?",
-            params![service_id],
-        )
-        .map_err(|e| e.to_string())?;
+        // The DELETE followed by N×INSERT must be atomic: if the INSERT
+        // for one group fails after we've already wiped the prior state,
+        // the service is left with a partial membership set. Wrap the
+        // whole sequence in a transaction so the WAL/rollback guarantees
+        // either all of the new associations land, or none do.
+        conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
 
-        // Add new associations
-        for group_id in group_ids {
+        let result = (|| -> Result<(), String> {
             conn.execute(
-                "INSERT INTO mcp_service_groups (service_id, group_id) VALUES (?1, ?2)",
-                params![service_id, group_id],
+                "DELETE FROM mcp_service_groups WHERE service_id = ?",
+                params![service_id],
             )
             .map_err(|e| e.to_string())?;
-        }
 
-        Ok(())
+            for group_id in group_ids {
+                conn.execute(
+                    "INSERT INTO mcp_service_groups (service_id, group_id) VALUES (?1, ?2)",
+                    params![service_id, group_id],
+                )
+                .map_err(|e| e.to_string())?;
+            }
+            Ok(())
+        })();
+
+        match result {
+            Ok(()) => {
+                conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
+                Ok(())
+            }
+            Err(e) => {
+                // Best-effort rollback. If `COMMIT` itself failed we cannot
+                // roll back the same connection; surface the original error.
+                let _ = conn.execute_batch("ROLLBACK");
+                Err(e)
+            }
+        }
     }
 
     // ==================== Audit Log Functions ====================
@@ -347,9 +420,9 @@ impl Database {
         details: Option<&str>,
         status: &str,
     ) -> Result<String, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let conn = self.lock_or_err()?;
         let id = uuid::Uuid::new_v4().to_string();
-        let created_at = chrono_lite_now();
+        let created_at = now_rfc3339();
 
         conn.execute(
             "INSERT INTO mcp_audit_log (id, actor, action, service_id, service_name, details, status, created_at)
@@ -367,7 +440,7 @@ impl Database {
         page: i32,
         page_size: i32,
     ) -> Result<AuditPage, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let conn = self.lock_or_err()?;
 
         // Build WHERE clause
         let mut conditions = Vec::new();
@@ -474,9 +547,4 @@ impl Database {
             total_pages,
         })
     }
-}
-
-// Simple chrono-like function for generating timestamps
-fn chrono_lite_now() -> String {
-    crate::utils::now_rfc3339()
 }

@@ -54,21 +54,19 @@
                 <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
                 <polyline points="22 4 12 14.01 9 11.01"/>
               </svg>
-              <div class="validation-info">
-                <span class="repo-name">{{ validationResult.name }}</span>
-                <span class="branch-count">{{ validationResult.branch_count }} 个分支</span>
-              </div>
-              </Teleport>
-</template>
-            <template v-else>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"/>
-                <line x1="15" y1="9" x2="9" y2="15"/>
-                <line x1="9" y1="9" x2="15" y2="15"/>
-              </svg>
-              <span>{{ validationResult.error_message }}</span>
-              </Teleport>
-</template>
+                <div class="validation-info">
+                  <span class="repo-name">{{ validationResult.name }}</span>
+                  <span class="branch-count">{{ validationResult.branch_count }} 个分支</span>
+                </div>
+              </template>
+              <template v-else>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="15" y1="9" x2="9" y2="15"/>
+                  <line x1="9" y1="9" x2="15" y2="15"/>
+                </svg>
+                <span>{{ validationResult.error_message }}</span>
+              </template>
           </div>
 
           <div class="form-actions">
@@ -168,7 +166,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useSkillImportStore } from '@/stores/skill-import';
 import type { SkillRepository, RepositoryValidation } from '@/types';
 import { confirm } from '@/utils/dialog';

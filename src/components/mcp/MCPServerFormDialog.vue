@@ -5,7 +5,7 @@
       <!-- Header -->
       <div class="dialog-header">
         <h3 id="dialog-title">{{ mode === 'add' ? 'Add MCP Server' : 'Edit MCP Server' }}</h3>
-        <button class="close-btn" @click="$emit('close')" aria-label="Close dialog">
+        <button class="close-btn" aria-label="Close dialog" @click="$emit('close')">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/>
             <line x1="6" y1="6" x2="18" y2="18"/>
@@ -15,7 +15,7 @@
 
       <!-- Content -->
       <div class="dialog-content">
-        <form @submit.prevent="handleSubmit" class="server-form">
+        <form class="server-form" @submit.prevent="handleSubmit">
           <!-- Name -->
           <div class="form-group" :class="{ 'has-error': errors.name }">
             <label for="name">Server Name *</label>
@@ -155,7 +155,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, watch, computed } from 'vue';
+import { reactive, ref, watch } from 'vue';
 import type { MCPService, MCPServiceFormData, ServerProtocol, AuthType } from '@/types';
 
 interface Props {
@@ -444,7 +444,7 @@ async function handleTestConnection() {
 }
 
 .config-textarea {
-  font-family: 'JetBrains Mono', 'SF Mono', Monaco, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   resize: vertical;
   min-height: 120px;

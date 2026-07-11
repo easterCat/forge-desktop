@@ -113,20 +113,16 @@ const pluginCount = computed(() => pluginStore.plugins.length);
 const pluginSub = computed(() => `${pluginCount.value} installed`);
 
 const updateCount = computed(() => {
-  return softwareStore.cliTools.filter((t: any) => t.needsUpdate).length;
+  return softwareStore.cliTools.filter((t) => t.needsUpdate).length;
 });
 
 // Installed CLI tools for Quick Actions grid
 const installedTools = computed(() => {
-  return softwareStore.cliTools.filter((t: any) => t.installed);
+  return softwareStore.cliTools.filter((t) => t.installed);
 });
 
 function navigateTo(path: string) {
   router.push(path);
-}
-
-function openSettings() {
-  router.push('/settings');
 }
 
 async function loadData() {

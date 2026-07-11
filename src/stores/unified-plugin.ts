@@ -12,7 +12,6 @@ import type {
   UnifiedPlugin,
   UnifiedMCP,
   PluginContentType,
-  SyncStatus,
   ClientType,
   WorkspaceConfig,
 } from '@/types/unified-plugin';
@@ -20,19 +19,13 @@ import { SUPPORTED_CLIENTS } from '@/types/unified-plugin';
 import {
   generateWorkspaceConfig,
   configToYaml,
-  mergeWorkspaceConfigs,
   validateWorkspaceConfig,
 } from '@/services/allagents-config';
-
-// ============================================================================
-// Tauri Command 结果类型
-// ============================================================================
-
-interface CommandResult {
-  success: boolean;
-  data?: any;
-  error?: string;
-}
+import type {
+  CommandResult,
+  SyncReportPayload,
+  WorkspaceStatusPayload,
+} from '@/utils/command-result';
 
 // ============================================================================
 // Store 定义
@@ -184,7 +177,7 @@ export const useUnifiedPluginStore = defineStore('unified-plugin', () => {
     error.value = null;
 
     try {
-      const result = await invoke<CommandResult>('allagents_update', {
+      const result = await invoke<CommandResult<SyncReportPayload>>('allagents_update', {
         workspacePath: workspacePath.value,
         offline: options.offline ?? false,
         dryRun: options.dryRun ?? false,
@@ -196,9 +189,16 @@ export const useUnifiedPluginStore = defineStore('unified-plugin', () => {
         syncStatus.value.syncedCount = result.data?.synced_count ?? 0;
         syncStatus.value.errorCount = result.data?.error_count ?? 0;
 
-        // 更新插件同步状态
+        // Update per-plugin sync status. If the backend reported zero
+        // errors, every plugin is fully synced; if it reported any,
+        // mark the batch as "partial" so the UI can warn the user
+        // instead of showing a misleading green "all synced" badge.
+        const hadErrors = (result.data?.error_count ?? 0) > 0;
+        const batchStatus: UnifiedPlugin['syncStatus'] = hadErrors
+          ? 'partial'
+          : 'synced';
         for (const plugin of plugins.value) {
-          plugin.syncStatus = 'synced';
+          plugin.syncStatus = batchStatus;
         }
 
         return true;
@@ -361,14 +361,14 @@ export const useUnifiedPluginStore = defineStore('unified-plugin', () => {
     error.value = null;
 
     try {
-      const result = await invoke<CommandResult>('allagents_status', {
+      const result = await invoke<CommandResult<WorkspaceStatusPayload>>('allagents_status', {
         workspacePath: workspacePath.value,
       });
 
       if (result.success && result.data) {
         // 更新客户端列表
         if (result.data.clients) {
-          targetClients.value = result.data.clients;
+          targetClients.value = result.data.clients as ClientType[];
         }
 
         return true;

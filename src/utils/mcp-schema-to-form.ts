@@ -1,4 +1,4 @@
-import type { JSONSchema, JSONSchemaProperty, FormField } from '@/types';
+import type { JSONSchema, JSONSchemaProperty } from '@/types';
 
 /**
  * Converts a JSON Schema to an array of form field definitions
@@ -16,7 +16,9 @@ export function schemaToFormFields(schema: JSONSchema): FormField[] {
       required: schema.required?.includes(name) ?? false,
       default: prop.default,
       description: prop.description,
-      enum: prop.enum,
+      enum: Array.isArray(prop.enum)
+        ? (prop.enum.filter((v): v is string | number => typeof v === 'string' || typeof v === 'number'))
+        : undefined,
     };
 
     // Handle nested objects and arrays
@@ -130,6 +132,6 @@ export interface FormField {
   required: boolean;
   default?: unknown;
   description?: string;
-  enum?: unknown[];
+  enum?: Array<string | number>;
   items?: JSONSchemaProperty;
 }

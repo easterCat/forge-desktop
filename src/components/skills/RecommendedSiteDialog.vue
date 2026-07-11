@@ -4,7 +4,7 @@
     <div class="dialog" role="dialog" aria-modal="true">
       <div class="dialog-header">
         <h3>{{ isEdit ? '编辑推荐网站' : '新增推荐网站' }}</h3>
-        <button class="close-btn" @click="onCancel" aria-label="关闭">
+        <button class="close-btn" aria-label="关闭" @click="onCancel">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/>
             <line x1="6" y1="6" x2="18" y2="18"/>

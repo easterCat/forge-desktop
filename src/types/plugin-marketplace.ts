@@ -94,6 +94,23 @@ export interface MarketplacePlugin {
   cliToolKeys?: string[];
 }
 
+/**
+ * Metadata for a CLI tool supported by the "Sync to" dialog.
+ * Populated from the Rust `CliToolManager::get_supported_tools()` command.
+ */
+export interface CliToolMeta {
+  /** Tool key, e.g. "claude-code", "codex", "gemini-cli" */
+  key: string;
+  /** Display name, e.g. "Claude Code" */
+  name: string;
+  /** Tooltip icon abbreviation (2-char), e.g. "CC" */
+  icon: string;
+  /** Brand accent color, e.g. "#B8944A" */
+  color: string;
+  /** Sync target plugin directory (null = not supported) */
+  pluginDir: string | null;
+}
+
 export interface PluginInstallProgress {
   pluginId: string;
   pluginName: string;
@@ -211,4 +228,57 @@ export interface PluginSyncResult {
   success: boolean;
   targetPath?: string;
   error?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Marketplace manifest (mirrors Rust `MarketplaceManifest` in
+// `src-tauri/src/services/plugin_marketplace.rs`).
+//
+// The manifest is the source of truth for what plugins the user has
+// installed from which marketplace source, and is persisted in
+// `$FORGE_HOME/plugins/marketplace.json` (legacy) or in the
+// `kv_store.marketplace_manifest` key (current).
+// ---------------------------------------------------------------------------
+
+/** Per-source entry inside `MarketplaceManifest.sources`. */
+export interface ManifestSource {
+  repoUrl: string;
+  /** Source kind: `"market"` (index repo) or `"res"` (single-plugin repo). */
+  type: string;
+  /** True if the source was added by the user, false for presets. */
+  external: boolean;
+  lastSyncAt: string | null;
+  pluginCount: number;
+}
+
+/** Per-plugin entry inside `MarketplaceManifest.plugins[sourceId]`. */
+export interface ManifestPlugin {
+  name: string;
+  description: string;
+  version: string;
+  /** Author is opaque in Rust (serde_json::Value) — string or object. */
+  author: string | Record<string, unknown>;
+  repoUrl: string;
+  /** Absolute on-disk path of the installed plugin directory. */
+  installedPath: string;
+  external: boolean;
+  dependencies: string[];
+}
+
+/** A record that a plugin was removed (for UI badges / "Recently removed"). */
+export interface RemovedEntry {
+  name: string;
+  source: string;
+  removedAt: string;
+  reason: string;
+}
+
+/** The full marketplace manifest, returned by `get_marketplace_manifest`. */
+export interface MarketplaceManifest {
+  version: string;
+  lastSyncAt: string | null;
+  sources: Record<string, ManifestSource>;
+  /** Map of source id → list of plugins from that source. */
+  plugins: Record<string, ManifestPlugin[]>;
+  removed: RemovedEntry[];
 }

@@ -4,21 +4,20 @@ import { defineStore } from 'pinia';
 import { ref, computed, shallowRef } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type {
-  MCPSource,
-  MCPServer,
+  MarketplaceMCPSource,
+  MarketplaceMCPServer,
   PaginatedMCPServers,
-  MCPSyncTarget,
-  MCPInstallProgress,
-  CategoryKey,
+  MarketplaceMCPSyncTarget,
+  MarketplaceMCPInstallProgress,
 } from '@/types';
 
 export const useMCPMarketplaceStore = defineStore('mcpMarketplace', () => {
   // State
-  const sources = ref<MCPSource[]>([]);
-  const currentSource = ref<MCPSource | null>(null);
-  const servers = ref<MCPServer[]>([]);
-  const localServers = ref<MCPServer[]>([]);
-  const syncTargets = ref<MCPSyncTarget[]>([]);
+  const sources = ref<MarketplaceMCPSource[]>([]);
+  const currentSource = ref<MarketplaceMCPSource | null>(null);
+  const servers = ref<MarketplaceMCPServer[]>([]);
+  const localServers = ref<MarketplaceMCPServer[]>([]);
+  const syncTargets = ref<MarketplaceMCPSyncTarget[]>([]);
   
   // Pagination state
   const currentPage = ref(1);
@@ -40,7 +39,7 @@ export const useMCPMarketplaceStore = defineStore('mcpMarketplace', () => {
   const error = ref<string | null>(null);
   
   // Install progress tracking - use shallowRef to avoid deep reactivity overhead
-  const installProgress = shallowRef<Map<string, MCPInstallProgress>>(new Map());
+  const installProgress = shallowRef<Map<string, MarketplaceMCPInstallProgress>>(new Map());
   
   // Computed
   const hasNextPage = computed(() => currentPage.value < totalPages.value);
@@ -54,7 +53,7 @@ export const useMCPMarketplaceStore = defineStore('mcpMarketplace', () => {
     installedServerNames.value.has(serverName);
   
   const serversByRegion = computed(() => {
-    const grouped: Record<string, MCPSource[]> = {
+    const grouped: Record<string, MarketplaceMCPSource[]> = {
       'mcp-specific': [],
       'international': [],
       'china': [],
@@ -77,7 +76,7 @@ export const useMCPMarketplaceStore = defineStore('mcpMarketplace', () => {
     try {
       isLoadingSources.value = true;
       error.value = null;
-      sources.value = await invoke<MCPSource[]>('get_mcp_sources');
+      sources.value = await invoke<MarketplaceMCPSource[]>('get_mcp_sources');
       
       // Select first source by default
       if (sources.value.length > 0 && !currentSource.value) {
@@ -119,13 +118,13 @@ export const useMCPMarketplaceStore = defineStore('mcpMarketplace', () => {
   
   async function fetchLocalServers() {
     try {
-      localServers.value = await invoke<MCPServer[]>('get_local_mcp_servers');
+      localServers.value = await invoke<MarketplaceMCPServer[]>('get_local_mcp_servers');
     } catch (e) {
       console.error('Failed to fetch local servers:', e);
     }
   }
   
-  function selectSource(source: MCPSource) {
+  function selectSource(source: MarketplaceMCPSource) {
     currentSource.value = source;
     currentPage.value = 1;
     fetchServers();
@@ -156,8 +155,8 @@ export const useMCPMarketplaceStore = defineStore('mcpMarketplace', () => {
     fetchServers();
   }
   
-  async function installServer(server: MCPServer, installDir?: string) {
-    const progress: MCPInstallProgress = {
+  async function installServer(server: MarketplaceMCPServer, installDir?: string) {
+    const progress: MarketplaceMCPInstallProgress = {
       serverId: server.id,
       serverName: server.name,
       stage: 'downloading',
@@ -242,7 +241,7 @@ export const useMCPMarketplaceStore = defineStore('mcpMarketplace', () => {
   async function syncServerToTarget(
     serverName: string,
     installDir: string,
-    target: MCPSyncTarget
+    target: MarketplaceMCPSyncTarget
   ) {
     isSyncing.value = true;
     
@@ -263,32 +262,24 @@ export const useMCPMarketplaceStore = defineStore('mcpMarketplace', () => {
   
   async function fetchSyncTargets() {
     try {
-      syncTargets.value = await invoke<MCPSyncTarget[]>('get_mcp_sync_targets');
+      syncTargets.value = await invoke<MarketplaceMCPSyncTarget[]>('get_mcp_sync_targets');
     } catch (e) {
       console.error('Failed to fetch sync targets:', e);
     }
   }
   
-  async function addSyncTarget(target: MCPSyncTarget) {
-    try {
-      const newTarget = await invoke<MCPSyncTarget>('add_mcp_sync_target', { target });
-      syncTargets.value.push(newTarget);
-      return newTarget;
-    } catch (e) {
-      throw e;
-    }
+  async function addSyncTarget(target: MarketplaceMCPSyncTarget) {
+    const newTarget = await invoke<MarketplaceMCPSyncTarget>('add_mcp_sync_target', { target });
+    syncTargets.value.push(newTarget);
+    return newTarget;
   }
-  
+
   async function removeSyncTarget(targetId: string) {
-    try {
-      await invoke('remove_mcp_sync_target', { targetId });
-      syncTargets.value = syncTargets.value.filter(t => t.id !== targetId);
-    } catch (e) {
-      throw e;
-    }
+    await invoke('remove_mcp_sync_target', { targetId });
+    syncTargets.value = syncTargets.value.filter(t => t.id !== targetId);
   }
   
-  function getInstallProgress(serverId: string): MCPInstallProgress | undefined {
+  function getInstallProgress(serverId: string): MarketplaceMCPInstallProgress | undefined {
     return installProgress.value.get(serverId);
   }
   

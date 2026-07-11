@@ -853,7 +853,7 @@ pub async fn execute_hook(
     };
 
     // Resolve the script path relative to plugin_dir
-    let script_name = hook_entry.command.split_whitespace().last().unwrap_or("");
+    let _script_name = hook_entry.command.split_whitespace().last().unwrap_or("");
 
     let start = std::time::Instant::now();
 

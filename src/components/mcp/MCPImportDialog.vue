@@ -5,7 +5,7 @@
       <!-- Header -->
       <div class="dialog-header">
         <h3 id="import-dialog-title">Import Mcps</h3>
-        <button class="close-btn" @click="handleClose" aria-label="Close dialog">
+        <button class="close-btn" aria-label="Close dialog" @click="handleClose">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/>
             <line x1="6" y1="6" x2="18" y2="18"/>
@@ -29,8 +29,8 @@
               ref="fileInput"
               type="file"
               accept=".json,.yaml,.yml"
-              @change="handleFileSelect"
               hidden
+              @change="handleFileSelect"
             />
 
             <div v-if="!selectedFile" class="drop-content">
@@ -133,7 +133,7 @@
             <label>Duplicate handling:</label>
             <div class="mode-options">
               <label class="radio-option" :class="{ selected: mode === 'skip' }">
-                <input type="radio" v-model="mode" value="skip" />
+                <input v-model="mode" type="radio" value="skip" />
                 <span class="radio-custom"></span>
                 <div class="mode-content">
                   <strong>Skip</strong>
@@ -141,7 +141,7 @@
                 </div>
               </label>
               <label class="radio-option" :class="{ selected: mode === 'overwrite' }">
-                <input type="radio" v-model="mode" value="overwrite" />
+                <input v-model="mode" type="radio" value="overwrite" />
                 <span class="radio-custom"></span>
                 <div class="mode-content">
                   <strong>Overwrite</strong>
@@ -221,7 +221,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue';
+import { ref, reactive } from 'vue';
 import { useMCPStore } from '@/stores/mcp';
 import type { MCPService, MCPImportResult } from '@/types';
 
@@ -334,9 +334,10 @@ async function processFile() {
     return;
   }
 
-  const servicesArray = Array.isArray(data) ? data : data.services;
+  const servicesArray: unknown[] = Array.isArray(data) ? data : (Array.isArray(data.services) ? data.services : []);
 
-  for (const item of servicesArray) {
+  for (const raw of servicesArray) {
+    const item = raw as Record<string, unknown>;
     if (!item.name || typeof item.name !== 'string') {
       importData.errors.push(`Entry missing or invalid "name" field`);
       continue;
@@ -349,7 +350,7 @@ async function processFile() {
 
     // Check for duplicates
     if (props.existingServices.some(s => s.name === item.name)) {
-      importData.duplicates.push(item as MCPService);
+      importData.duplicates.push(item as unknown as MCPService);
       continue;
     }
 
@@ -386,7 +387,7 @@ function parseYaml(text: string): Record<string, unknown> {
     } else if (currentService && trimmed.includes(':')) {
       const colonIndex = trimmed.indexOf(':');
       const key = trimmed.slice(0, colonIndex).trim();
-      let value = trimmed.slice(colonIndex + 1).trim().replace(/^["']|["']$/g, '');
+      const value = trimmed.slice(colonIndex + 1).trim().replace(/^["']|["']$/g, '');
 
       // Try to parse numbers
       if (/^\d+$/.test(value)) {

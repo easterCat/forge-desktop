@@ -27,8 +27,11 @@ export function useGlassTheme() {
    * Note: UI does NOT expose this in FEAT-024-C
    */
   function setGlassVariant(variantId: string | null) {
-    const validVariants = ['default', 'cool-mist', 'sage', 'lavender', 'ember', 'slate', 'arctic', 'rose-gold']
-    const variant = variantId && validVariants.includes(variantId) ? variantId as any : null
+    const validVariants = ['default', 'cool-mist', 'sage', 'lavender', 'ember', 'slate', 'arctic', 'rose-gold'] as const
+    type Variant = typeof validVariants[number]
+    const variant: Variant | null = variantId && (validVariants as readonly string[]).includes(variantId)
+      ? (variantId as Variant)
+      : null
     store.setGlassVariant(variant)
   }
 

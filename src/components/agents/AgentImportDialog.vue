@@ -25,8 +25,8 @@
             <label>仓库路径</label>
             <div class="input-row">
               <input
-                type="text"
                 v-model="repoPath"
+                type="text"
                 placeholder="例如: ~/agency-agents-zh"
                 class="path-field"
               />

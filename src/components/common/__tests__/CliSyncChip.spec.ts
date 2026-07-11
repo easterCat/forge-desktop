@@ -12,10 +12,12 @@ vi.mock('../../../composables/useClientSync', () => ({
     isDialogOpen: ref(false),
     syncingClient: ref(null),
     isLoading: ref(false),
+    currentError: ref(null),
     toggleDialog: vi.fn(),
     toggleSync: vi.fn(),
     syncAll: vi.fn(),
-    initClients: vi.fn()
+    initClients: vi.fn(),
+    clearError: vi.fn()
   }))
 }))
 
@@ -56,10 +58,12 @@ describe('CliSyncChip', () => {
       isDialogOpen: ref(false),
       syncingClient: ref(null),
       isLoading: ref(false),
+      currentError: ref(null),
       toggleDialog: mockToggleDialog,
       toggleSync: vi.fn(),
       syncAll: vi.fn(),
-      initClients: vi.fn()
+      initClients: vi.fn(),
+      clearError: vi.fn()
     })
 
     const wrapper = mount(CliSyncChip, {
@@ -84,10 +88,12 @@ describe('CliSyncChip', () => {
       isDialogOpen: ref(true),
       syncingClient: ref(null),
       isLoading: ref(false),
+      currentError: ref(null),
       toggleDialog: vi.fn(),
       toggleSync: vi.fn(),
       syncAll: vi.fn(),
-      initClients: vi.fn()
+      initClients: vi.fn(),
+      clearError: vi.fn()
     })
 
     const wrapper = mount(CliSyncChip, {

@@ -69,14 +69,6 @@ const localStorageMock = (() => {
 
 Object.defineProperty(globalThis, 'localStorage', { value: localStorageMock, writable: true })
 
-// Create toast mock that uses showNotification
-const toast = {
-  success: (msg: string) => mockShowNotification(msg, 'success'),
-  error: (msg: string) => mockShowNotification(msg, 'error'),
-  warning: (msg: string) => mockShowNotification(msg, 'warn'),
-  info: (msg: string) => mockShowNotification(msg, 'info')
-}
-
 describe('useClientSync', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -260,7 +252,7 @@ describe('useClientSync', () => {
       error: null
     })
 
-    const { clients, initClients, toggleSync } = useClientSync()
+    const { initClients, toggleSync } = useClientSync()
     await initClients()
 
     await toggleSync('claude')
@@ -388,7 +380,7 @@ describe('useClientSync', () => {
         error: null
       })
 
-      const { clients, initClients, toggleSync, totalSyncedCount } = useClientSync()
+      const { initClients, toggleSync, totalSyncedCount } = useClientSync()
       await initClients()
 
       // Configured clients are initially not synced
@@ -444,7 +436,7 @@ describe('useClientSync', () => {
         error: null
       })
 
-      const { clients, initClients, toggleSync } = useClientSync()
+      const { initClients, toggleSync } = useClientSync()
       await initClients()
 
       // Step 2: Sync claude

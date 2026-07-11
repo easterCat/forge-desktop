@@ -1,5 +1,5 @@
 <template>
-  <div class="import-dropdown" ref="dropdownRef">
+  <div ref="dropdownRef" class="import-dropdown">
     <button 
       class="dropdown-trigger"
       :class="{ active: isOpen }"

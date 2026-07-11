@@ -58,3 +58,8 @@ coverage/
 *.tmp
 *.temp
 *.bak
+
+.doc
+/doc
+.docs
+/docs

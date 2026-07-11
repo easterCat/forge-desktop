@@ -28,7 +28,11 @@ export default defineConfig({
     },
   },
   build: {
-    target: process.env.TAURI_ENV_PLATFORM === 'windows' ? 'chrome105' : 'safari13',
+    // Audit 1.5 / P2-15: raised from chrome105 / safari13 to chrome130 /
+    // safari17. The newer targets drop polyfills (e.g. native optional
+    // chaining, top-level await, ??, class fields) that our codebase
+    // already uses and that the old targets had to down-level.
+    target: process.env.TAURI_ENV_PLATFORM === 'windows' ? 'chrome130' : 'safari17',
     minify: !process.env.TAURI_ENV_DEBUG ? 'esbuild' : false,
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
     rollupOptions: {

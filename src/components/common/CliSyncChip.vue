@@ -41,6 +41,7 @@ const emit = defineEmits<{
 }>()
 
 // 使用组合式函数
+const clientSync = useClientSync()
 const {
   clients,
   totalSyncedCount,
@@ -50,7 +51,7 @@ const {
   toggleSync,
   syncAll,
   initClients
-} = useClientSync()
+} = clientSync
 
 const totalClients = computed(() => clients.value.length)
 

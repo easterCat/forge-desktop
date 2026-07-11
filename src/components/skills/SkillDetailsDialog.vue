@@ -5,7 +5,7 @@
       <!-- Header -->
       <div class="dialog-header">
         <h3>Skill Details</h3>
-        <button class="close-btn" @click="$emit('close')" aria-label="关闭">
+        <button class="close-btn" aria-label="关闭" @click="$emit('close')">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/>
             <line x1="6" y1="6" x2="18" y2="18"/>
@@ -202,7 +202,6 @@
 </template>
 
 <script setup lang="ts">
-import { getCurrentInstance } from 'vue';
 import type { MarketplaceSkill } from '@/types';
 import { open as openExternal } from '@tauri-apps/plugin-shell';
 

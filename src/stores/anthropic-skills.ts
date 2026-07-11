@@ -107,14 +107,16 @@ export const useAnthropicSkillsStore = defineStore('anthropicSkills', () => {
       switch (sortBy.value) {
         case 'name':
           return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
-        case 'version':
+        case 'version': {
           const versionA = a.version || '0.0.0';
           const versionB = b.version || '0.0.0';
           return versionB.localeCompare(versionA);
-        case 'install_time':
+        }
+        case 'install_time': {
           const timeA = a.installed_at || '';
           const timeB = b.installed_at || '';
           return timeB.localeCompare(timeA);
+        }
         default:
           return 0;
       }

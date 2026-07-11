@@ -7,6 +7,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use crate::services::cli_tools::CliToolManager;
+use crate::services::CliToolConfig;
 use crate::services::plugin_marketplace::forge_home;
 
 // -- Sync record types ----------------------------------------------------
@@ -51,7 +52,7 @@ fn sync_records_path() -> PathBuf {
 
 fn load_sync_records() -> HashMap<String, PluginSyncRecord> {
     if let Some(db) = crate::db::Database::global() {
-        let kv = crate::db::KvStore::new(&db.conn);
+        let kv = crate::db::KvStore::new(db.conn.clone());
         return kv.get("plugin_sync_records").unwrap_or_default();
     }
     // Fallback
@@ -67,7 +68,7 @@ fn load_sync_records() -> HashMap<String, PluginSyncRecord> {
 
 fn save_sync_records(records: &HashMap<String, PluginSyncRecord>) -> Result<(), String> {
     if let Some(db) = crate::db::Database::global() {
-        let kv = crate::db::KvStore::new(&db.conn);
+        let kv = crate::db::KvStore::new(db.conn.clone());
         return kv.put("plugin_sync_records", records);
     }
     // Fallback
@@ -346,6 +347,13 @@ fn disable_claude_plugin(plugin_name: &str, repo_name: &str) -> Result<(), Strin
 
 // -- Tauri Commands -------------------------------------------------------
 
+/// Return all supported CLI tools from CliToolManager with their metadata.
+/// Used by the frontend to render the full "Sync to" tool list dialog.
+#[tauri::command]
+pub fn get_supported_cli_tools() -> Vec<CliToolConfig> {
+    CliToolManager::get_supported_tools()
+}
+
 /// Sync a plugin's cache data to the specified CLI tool's plugin directory.
 /// Copies all files from `$FORGE_HOME/plugins/cache/<plugin_name>/`
 /// to the CLI tool's plugin directory and records the sync in `$FORGE_HOME/plugins/sync_records.json`.
@@ -389,7 +397,7 @@ pub async fn sync_plugin_to_cli_tool(
     let sub_path = cache_root.join(repo_name).join(&plugin_name);
     let root_path = cache_root.join(&plugin_name).join(&plugin_name);
     let sub_path_exists = sub_path.exists();
-    let mut source_path = if sub_path_exists {
+    let source_path = if sub_path_exists {
         sub_path
     } else if root_path.exists() {
         root_path

@@ -19,8 +19,8 @@
     <div class="header-actions">
         <button
           class="btn btn-secondary btn-sm"
-          @click="handleRefresh"
           :disabled="store.isRefreshing"
+          @click="handleRefresh"
         >
           <svg
             class="sync-icon"
@@ -49,8 +49,8 @@
           <line x1="21" y1="21" x2="16.65" y2="16.65" />
         </svg>
         <input
-          type="text"
           v-model="searchKeyword"
+          type="text"
           placeholder="搜索技能名称或描述..."
           @input="handleSearch"
         />
@@ -63,13 +63,13 @@
       </div>
 
       <div class="filter-group">
-        <select v-model="filterStatus" @change="handleFilterChange" class="filter-select">
+        <select v-model="filterStatus" class="filter-select" @change="handleFilterChange">
           <option value="all">全部</option>
           <option value="installed">已安装</option>
           <option value="not_installed">未安装</option>
         </select>
 
-        <select v-model="sortOrder" @change="handleSortChange" class="filter-select">
+        <select v-model="sortOrder" class="filter-select" @change="handleSortChange">
           <option value="name">按名称排序</option>
           <option value="version">按版本排序</option>
           <option value="install_time">按安装时间排序</option>

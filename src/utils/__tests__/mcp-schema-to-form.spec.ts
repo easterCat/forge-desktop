@@ -18,7 +18,6 @@ import {
   validateField,
   parseJsonSafe,
   stringifyJsonSafe,
-  type FormField,
 } from '../mcp-schema-to-form';
 import type { JSONSchema, JSONSchemaProperty } from '@/types/mcp';
 

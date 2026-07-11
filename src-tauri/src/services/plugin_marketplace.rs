@@ -12,6 +12,74 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+// ---------------------------------------------------------------------------
+// URL safety
+// ---------------------------------------------------------------------------
+
+/// Characters that are *not* allowed inside a GitHub owner or repository
+/// name. We intentionally reject anything that could be smuggled into a
+/// shell command line, confuse `git`, or escape a `Path` component.
+fn is_valid_github_segment(seg: &str) -> bool {
+    !seg.is_empty()
+        && seg.len() <= 100
+        && seg
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_')
+}
+
+/// Validate that a user-supplied URL is a safe GitHub HTTPS URL we can
+/// pass to `git clone` / `git archive --remote`. Returns the canonical
+/// (host, owner, repo) tuple on success.
+///
+/// Rejects:
+/// * non-`https://` schemes (no `http://`, no `git://`, no `ssh://`,
+///   no `file://`, no `ext::` git transports);
+/// * non-`github.com` hosts;
+/// * owner / repo segments containing shell metacharacters, `..`, or
+///   other than `[A-Za-z0-9._-]`.
+pub fn validate_github_url(url: &str) -> Result<(String, String, String), String> {
+    let parsed = url::Url::parse(url).map_err(|e| format!("Invalid URL: {}", e))?;
+
+    if parsed.scheme() != "https" {
+        return Err(format!(
+            "Only https:// URLs are allowed (got '{}')",
+            parsed.scheme()
+        ));
+    }
+
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| "URL has no host".to_string())?
+        .to_ascii_lowercase();
+    if host != "github.com" {
+        return Err(format!("Only github.com hosts are allowed (got '{}')", host));
+    }
+
+    // Strip leading "/" and split path into segments.
+    let segments: Vec<&str> = parsed
+        .path()
+        .trim_start_matches('/')
+        .split('/')
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    if segments.len() < 2 {
+        return Err("URL must include both owner and repository (e.g. https://github.com/owner/repo)".to_string());
+    }
+
+    let owner = segments[0];
+    let repo = segments[1].trim_end_matches(".git");
+
+    if !is_valid_github_segment(owner) {
+        return Err(format!("Invalid GitHub owner: '{}'", owner));
+    }
+    if !is_valid_github_segment(repo) {
+        return Err(format!("Invalid GitHub repository: '{}'", repo));
+    }
+
+    Ok((host, owner.to_string(), repo.to_string()))
+}
+
 // -- Manifest types (mirror of `.claude-plugin/marketplace.json`) ---------
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -208,7 +276,7 @@ pub fn source_notes_path() -> PathBuf {
 /// Returns an empty map if the file does not exist or cannot be parsed.
 pub fn read_source_notes() -> HashMap<String, String> {
     if let Some(db) = crate::db::Database::global() {
-        let kv = crate::db::KvStore::new(&db.conn);
+        let kv = crate::db::KvStore::new(db.conn.clone());
         if let Some(reg) = kv.get::<SourceNotesRegistry>("plugin_source_notes") {
             return reg.notes;
         }
@@ -236,7 +304,7 @@ pub fn read_source_notes() -> HashMap<String, String> {
 /// Write all source notes to disk.
 pub fn write_source_notes(notes: &HashMap<String, String>) -> Result<(), String> {
     if let Some(db) = crate::db::Database::global() {
-        let kv = crate::db::KvStore::new(&db.conn);
+        let kv = crate::db::KvStore::new(db.conn.clone());
         let reg = SourceNotesRegistry {
             version: "1".to_string(),
             notes: notes.clone(),
@@ -270,7 +338,7 @@ pub struct UserSourceRegistry {
 
 pub fn read_user_sources() -> Vec<PluginSource> {
     let mut sources: Vec<PluginSource> = if let Some(db) = crate::db::Database::global() {
-        let kv = crate::db::KvStore::new(&db.conn);
+        let kv = crate::db::KvStore::new(db.conn.clone());
         kv.get::<UserSourceRegistry>("plugin_user_sources")
             .map(|reg| reg.sources)
             .unwrap_or_default()
@@ -317,7 +385,7 @@ pub fn read_user_sources() -> Vec<PluginSource> {
 
 pub fn write_user_sources(sources: &[PluginSource]) -> Result<(), String> {
     if let Some(db) = crate::db::Database::global() {
-        let kv = crate::db::KvStore::new(&db.conn);
+        let kv = crate::db::KvStore::new(db.conn.clone());
         let reg = UserSourceRegistry {
             version: "1".to_string(),
             sources: sources.to_vec(),
@@ -386,7 +454,7 @@ pub fn update_user_source_repo_type(
 pub fn read_manifest() -> MarketplaceManifest {
     // Try KV store first; fall back to legacy JSON file during migration window
     if let Some(db) = crate::db::Database::global() {
-        let kv = crate::db::KvStore::new(&db.conn);
+        let kv = crate::db::KvStore::new(db.conn.clone());
         if let Some(manifest) = kv.get::<MarketplaceManifest>("marketplace_manifest") {
             return manifest;
         }
@@ -411,7 +479,7 @@ pub fn read_manifest() -> MarketplaceManifest {
 
 pub fn write_manifest(manifest: &MarketplaceManifest) -> Result<(), String> {
     if let Some(db) = crate::db::Database::global() {
-        let kv = crate::db::KvStore::new(&db.conn);
+        let kv = crate::db::KvStore::new(db.conn.clone());
         return kv.put("marketplace_manifest", manifest);
     }
     // Fallback: write to JSON file
@@ -1775,6 +1843,12 @@ fn download_single_plugin(
 
 /// Try `git archive --remote=<repo_url> HEAD:<sub_path>` piped to `tar -x`.
 fn try_git_archive_remote(repo_url: &str, sub_path: &str, dest: &PathBuf) -> Result<(), String> {
+    // Defence in depth: never pass arbitrary URLs to `git archive --remote`.
+    // This transport lets the remote host run arbitrary code via git's
+    // smart-http backend, so we restrict it to github.com HTTPS.
+    validate_github_url(repo_url)
+        .map_err(|e| format!("Refusing git archive for unsafe URL: {}", e))?;
+
     let dest_parent = dest
         .parent()
         .ok_or_else(|| "dest has no parent directory".to_string())?;
@@ -1828,6 +1902,12 @@ fn try_git_archive_remote(repo_url: &str, sub_path: &str, dest: &PathBuf) -> Res
 
 /// Fallback: `git clone --depth 1 --filter=blob:none --sparse` + sparse-checkout.
 fn try_sparse_checkout_fallback(repo_url: &str, sub_path: &str, dest: &PathBuf) -> Result<(), String> {
+    // Defence in depth: refuse any non-github.com URL. Callers in the
+    // install pipeline already validate, but this is the last barrier
+    // before invoking `git clone` (which can run upload-pack hooks).
+    validate_github_url(repo_url)
+        .map_err(|e| format!("Refusing git clone for unsafe URL: {}", e))?;
+
     let tmp_base = std::env::temp_dir().join(format!(
         "env-manager-clone-{}",
         std::process::id()
@@ -2687,6 +2767,10 @@ pub async fn install_marketplace_source(
         let rn = source.repo_name.clone().ok_or_else(|| {
             format!("No repo_name configured for source: {}", source_id)
         })?;
+        // Preset URLs are trusted but still validated defensively.
+        validate_github_url(&source.command).map_err(|e| {
+            format!("Preset source '{}' has invalid URL: {}", source_id, e)
+        })?;
         (source.command.clone(), rn)
     } else {
         // User-added source path: require a repo_url and derive repo_name.
@@ -2700,6 +2784,9 @@ pub async fn install_marketplace_source(
         if trimmed.is_empty() {
             return Err(format!("Unknown source: {} (empty repo_url)", source_id));
         }
+        // SECURITY: reject any URL that is not a safe github.com HTTPS URL
+        // before it is ever passed to git, the filesystem, or shellwords.
+        validate_github_url(&trimmed)?;
         let rn = extract_repo_name_from_url(&trimmed).ok_or_else(|| {
             format!("Cannot derive repo_name from URL: {}", trimmed)
         })?;
@@ -2764,6 +2851,10 @@ fn clone_source_to_path(
     location_name: &str,
     app_handle: Option<&tauri::AppHandle>,
 ) -> Result<(), String> {
+    // Final guard: callers may pass through different code paths, so
+    // we re-validate here before invoking the subprocess.
+    validate_github_url(repo_url)
+        .map_err(|e| format!("Refusing to clone unsafe URL for source '{}': {}", source_id, e))?;
     // Create parent directory
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent)
@@ -2875,7 +2966,7 @@ pub struct InstalledEntry {
 
 pub fn read_installed_registry() -> InstalledRegistry {
     if let Some(db) = crate::db::Database::global() {
-        let kv = crate::db::KvStore::new(&db.conn);
+        let kv = crate::db::KvStore::new(db.conn.clone());
         if let Some(reg) = kv.get::<InstalledRegistry>("installed_plugin_registry") {
             return reg;
         }
@@ -2898,7 +2989,7 @@ pub fn read_installed_registry() -> InstalledRegistry {
 
 pub fn write_installed_registry(reg: &InstalledRegistry) -> Result<(), String> {
     if let Some(db) = crate::db::Database::global() {
-        let kv = crate::db::KvStore::new(&db.conn);
+        let kv = crate::db::KvStore::new(db.conn.clone());
         return kv.put("installed_plugin_registry", reg);
     }
     let path = installed_plugins_path();

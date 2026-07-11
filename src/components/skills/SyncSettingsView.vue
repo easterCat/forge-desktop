@@ -52,8 +52,8 @@
             </div>
             <button
               class="btn btn-icon btn-sm"
-              @click="$emit('remove', target.id)"
               title="Remove target"
+              @click="$emit('remove', target.id)"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="3 6 5 6 21 6"/>
@@ -81,8 +81,8 @@
             <div class="form-group flex-1">
               <label>Name</label>
               <input
-                type="text"
                 v-model="newTarget.name"
+                type="text"
                 placeholder="e.g., Claude Desktop"
               />
             </div>
@@ -98,8 +98,8 @@
             <label>Path</label>
             <div class="path-input">
               <input
-                type="text"
                 v-model="newTarget.path"
+                type="text"
                 placeholder="~/.claude/skills/"
               />
               <button class="btn btn-secondary" @click="browsePath">

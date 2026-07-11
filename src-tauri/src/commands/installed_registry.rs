@@ -1,6 +1,6 @@
 // Installed Registry Tauri Commands — Feature 5
 
-use crate::services::{InstalledRegistry, InstalledEntry};
+use crate::services::InstalledRegistry;
 
 #[tauri::command]
 pub fn get_installed_registry() -> Result<InstalledRegistry, String> {

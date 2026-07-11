@@ -7,6 +7,7 @@ use crate::db::mcp_tables::{
 use crate::services::mcp_protocol::{
     DiscoveryCache, HttpHandler, InvokeResult, MCPServiceConfig, StdioHandler,
 };
+use crate::utils::now_rfc3339;
 use crate::AppState;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
@@ -23,6 +24,34 @@ lazy_static! {
 }
 
 const DISCOVERY_TTL_SECS: u64 = 300; // 5 minutes
+
+// ==================== Lock Helpers ====================
+//
+// `DISCOVERY_CACHE` is a process-global `RwLock`. If any thread panics while
+// holding the lock, std marks the mutex as "poisoned" and every subsequent
+// `.read()` / `.write()` call panics too, taking the whole app down. The
+// helpers below recover from poisoning the same way `db::connection` does:
+// warn, then return the inner guard so the cache stays usable.
+
+fn read_discovery_cache() -> std::sync::RwLockReadGuard<'static, HashMap<String, (DiscoveryCache, std::time::Instant)>> {
+    match DISCOVERY_CACHE.read() {
+        Ok(g) => g,
+        Err(poisoned) => {
+            log::warn!("DISCOVERY_CACHE was poisoned; recovering in-process");
+            poisoned.into_inner()
+        }
+    }
+}
+
+fn write_discovery_cache() -> std::sync::RwLockWriteGuard<'static, HashMap<String, (DiscoveryCache, std::time::Instant)>> {
+    match DISCOVERY_CACHE.write() {
+        Ok(g) => g,
+        Err(poisoned) => {
+            log::warn!("DISCOVERY_CACHE was poisoned; recovering in-process");
+            poisoned.into_inner()
+        }
+    }
+}
 
 // ==================== Types ====================
 
@@ -84,7 +113,7 @@ fn get_current_actor() -> String {
 }
 
 fn is_cache_valid(service_id: &str) -> bool {
-    let cache = DISCOVERY_CACHE.read().unwrap();
+    let cache = read_discovery_cache();
     if let Some((_, timestamp)) = cache.get(service_id) {
         timestamp.elapsed().as_secs() < DISCOVERY_TTL_SECS
     } else {
@@ -93,22 +122,22 @@ fn is_cache_valid(service_id: &str) -> bool {
 }
 
 fn get_cached_discovery(service_id: &str) -> Option<DiscoveryCache> {
-    let cache = DISCOVERY_CACHE.read().unwrap();
+    let cache = read_discovery_cache();
     cache.get(service_id).map(|(discovery, _)| discovery.clone())
 }
 
 fn set_cached_discovery(service_id: String, discovery: DiscoveryCache) {
-    let mut cache = DISCOVERY_CACHE.write().unwrap();
+    let mut cache = write_discovery_cache();
     cache.insert(service_id, (discovery, std::time::Instant::now()));
 }
 
 fn invalidate_cache(service_id: &str) {
-    let mut cache = DISCOVERY_CACHE.write().unwrap();
+    let mut cache = write_discovery_cache();
     cache.remove(service_id);
 }
 
 fn evict_if_overflow() {
-    let mut cache = DISCOVERY_CACHE.write().unwrap();
+    let mut cache = write_discovery_cache();
     if cache.len() > 100 {
         // Collect keys to remove before mutating
         let mut items: Vec<_> = cache.iter().collect();
@@ -197,7 +226,10 @@ pub async fn invoke_mcp_tool(
     let args_for_audit = args.clone();
     let result = match protocol.as_str() {
         "stdio" => StdioHandler::new(config).invoke_tool(&tool_name, args).await,
-        _ => HttpHandler::new(config).invoke_tool(&tool_name, args).await,
+        _ => match HttpHandler::new(config) {
+            Ok(h) => h.invoke_tool(&tool_name, args).await,
+            Err(e) => Err(e),
+        },
     };
 
     // Log to audit — only record toolName and args, not the full response
@@ -253,7 +285,10 @@ pub async fn discover_mcp_service(
 
     let discovery = match protocol.as_str() {
         "stdio" => StdioHandler::new(config).discover().await,
-        _ => HttpHandler::new(config).discover().await,
+        _ => match HttpHandler::new(config) {
+            Ok(h) => h.discover().await,
+            Err(e) => Err(e),
+        },
     }?;
 
     // Cache the result
@@ -281,11 +316,24 @@ pub async fn export_mcp_services(
         services
     };
 
+    // Pre-fetch group memberships for every service in one round-trip
+    // instead of N+1. The single-service `get_service_groups` call would
+    // serialise on the shared `Mutex<Connection>` per row, dominating
+    // export time as the service list grows.
+    let service_id_refs: Vec<String> = filtered.iter().map(|s| s.id.clone()).collect();
+    let group_membership = state
+        .db
+        .get_service_groups_batch(&service_id_refs)
+        .map_err(|e| e.to_string())?;
+
     // Convert to export format
     let export_services: Vec<serde_json::Value> = filtered
         .iter()
         .map(|s| {
-            let group_ids = state.db.get_service_groups(&s.id).unwrap_or_default();
+            let group_ids = group_membership
+                .get(&s.id)
+                .cloned()
+                .unwrap_or_default();
             serde_json::json!({
                 "name": s.name,
                 "endpoint": s.endpoint,
@@ -299,7 +347,7 @@ pub async fn export_mcp_services(
 
     let export_data = serde_json::json!({
         "version": "1.0",
-        "exportedAt": chrono_lite_now(),
+        "exportedAt": now_rfc3339(),
         "services": export_services
     });
 
@@ -587,8 +635,4 @@ fn determine_protocol(endpoint: &str) -> String {
     } else {
         "stdio".to_string()
     }
-}
-
-fn chrono_lite_now() -> String {
-    crate::utils::now_rfc3339()
 }

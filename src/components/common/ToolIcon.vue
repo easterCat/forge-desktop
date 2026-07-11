@@ -27,6 +27,19 @@
 <script setup lang="ts">
 import { computed, useAttrs } from 'vue';
 
+const props = withDefaults(defineProps<{
+  /** The CLI tool key (e.g. "cursor", "claude-code") */
+  toolKey: string;
+  /** Pixel size for both width and height. The SVG itself is 48x48 — we scale
+   *  with width/height attributes so it stays crisp at any size. */
+  size?: number | string;
+  /** Optional alt text. Omit for purely decorative usage. */
+  alt?: string;
+}>(), {
+  size: 46,
+  alt: '',
+});
+
 // Vite glob: import every tool SVG as a URL at build time. Eager = true so
 // the URLs are resolved immediately and the result is a plain object.
 // The path is relative to this component file: src/components/common/ →
@@ -53,19 +66,6 @@ const TOOL_ICON_MAP: Record<string, string> = {
 };
 
 defineOptions({ name: 'ToolIcon', inheritAttrs: false });
-
-const props = withDefaults(defineProps<{
-  /** The CLI tool key (e.g. "cursor", "claude-code") */
-  toolKey: string;
-  /** Pixel size for both width and height. The SVG itself is 48x48 — we scale
-   *  with width/height attributes so it stays crisp at any size. */
-  size?: number | string;
-  /** Optional alt text. Omit for purely decorative usage. */
-  alt?: string;
-}>(), {
-  size: 46,
-  alt: '',
-});
 
 // Suppress Vue's "Extraneous non-emits event listeners" warning for $attrs
 // forwarding (we manually bind class above).

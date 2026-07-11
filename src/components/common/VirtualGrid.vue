@@ -30,9 +30,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, isRef, ref as vueRef, type Ref } from 'vue';
+import { computed, isRef, type Ref } from 'vue';
 import { useVirtualGrid } from '@/composables/useVirtualGrid';
 
+// `defineProps` registers the prop type for template auto-destructure
+// AND exposes a `props` binding used in setup. ESLint flags the macro's
+// result as "unused" because it doesn't see the binding's runtime usage.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const props = withDefaults(
   defineProps<{
     /** Array of items to render (plain array or Ref — both accepted). */

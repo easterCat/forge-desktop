@@ -5,7 +5,7 @@
  */
 
 import { getAllPlugins, getRemovedPlugins, loadManifest } from './manifest.mjs';
-import { log, info, success, colors } from './utils.mjs';
+import { info, colors } from './utils.mjs';
 
 /**
  * Run list command

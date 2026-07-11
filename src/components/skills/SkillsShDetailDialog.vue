@@ -7,7 +7,7 @@
           <h3>{{ skill.name }}</h3>
           <span class="skill-source">{{ skill.source }}</span>
         </div>
-        <button class="close-btn" @click="$emit('close')" aria-label="关闭">
+        <button class="close-btn" aria-label="关闭" @click="$emit('close')">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/>
             <line x1="6" y1="6" x2="18" y2="18"/>
@@ -22,11 +22,11 @@
             <span class="stat-value">{{ formatNumber(skill.installs) }}</span>
             <span class="stat-label">总安装</span>
           </div>
-          <div class="stat-item" v-if="detail?.installs">
+          <div v-if="detail?.installs" class="stat-item">
             <span class="stat-value">{{ formatNumber(detail.installs) }}</span>
             <span class="stat-label">当前安装</span>
           </div>
-          <div class="stat-item" v-if="detail?.hash">
+          <div v-if="detail?.hash" class="stat-item">
             <span class="stat-value hash">{{ detail.hash.slice(0, 8) }}</span>
             <span class="stat-label">Hash</span>
           </div>
@@ -132,7 +132,7 @@
         <div class="install-command">
           <span class="command-label">安装命令:</span>
           <code class="command-code">{{ installCommand }}</code>
-          <button class="btn-icon" @click="copyCommand" title="复制">
+          <button class="btn-icon" title="复制" @click="copyCommand">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
               <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
@@ -148,8 +148,8 @@
           </button>
           <button
             class="btn btn-primary"
-            @click="handleInstall"
             :disabled="isInstalling || !skill.installUrl"
+            @click="handleInstall"
           >
             <svg v-if="isInstalling" class="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 12a9 9 0 11-6.219-8.56"/>

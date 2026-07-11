@@ -7,7 +7,7 @@
         <span class="site-count">{{ store.count }} 个网站</span>
       </div>
       <div class="header-actions">
-        <button class="btn btn-secondary btn-sm" @click="onResetDefaults" title="恢复为内置推荐列表">
+        <button class="btn btn-secondary btn-sm" title="恢复为内置推荐列表" @click="onResetDefaults">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="23 4 23 10 17 10"/>
             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
@@ -36,7 +36,7 @@
           type="text"
           placeholder="搜索网站名称或介绍..."
         />
-        <button v-if="searchKeyword" class="clear-btn" @click="searchKeyword = ''" aria-label="清除搜索">
+        <button v-if="searchKeyword" class="clear-btn" aria-label="清除搜索" @click="searchKeyword = ''">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/>
             <line x1="6" y1="6" x2="18" y2="18"/>

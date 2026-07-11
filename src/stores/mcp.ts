@@ -12,7 +12,6 @@ import type {
   MCPAuditPage,
   MCPInvocationResult,
   MCPImportResult,
-  MCPServiceFormData,
   MCPExportFormat,
   MCPHealthStatus,
 } from '@/types';
@@ -368,7 +367,15 @@ export const useMCPStore = defineStore('mcp', () => {
       if (typeof aVal === 'number' && typeof bVal === 'number') {
         return (aVal - bVal) * order;
       }
-      return ((aVal as boolean ? 1 : 0) < (bVal as boolean ? 1 : 0) ? -1 : 1) * order;
+      // Fallback comparison for mixed-type values (e.g. comparing a string
+      // against a number after a `status` sort). Treat non-comparable
+      // operands as 0 so the comparator returns a stable direction.
+      const aNum = Number(aVal);
+      const bNum = Number(bVal);
+      if (Number.isFinite(aNum) && Number.isFinite(bNum)) {
+        return (aNum - bNum) * order;
+      }
+      return 0;
     });
 
     return result;

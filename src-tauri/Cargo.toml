@@ -21,7 +21,26 @@ tauri-plugin-os = "2.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rusqlite = { version = "0.32", features = ["bundled"] }
-tokio = { version = "1.0", features = ["full"] }
+# `tokio` features chosen to match actual usage in this crate:
+#   * `fs`             — async file I/O used by backup, file_service, mcp_marketplace
+#   * `process`        — async Command for git/anthropic/skills_sh/mcp_bridge
+#   * `io-util`        — AsyncWriteExt for stdin pipes (mcp_bridge, mcp_protocol)
+#   * `macros`         — #[tokio::main] / #[tokio::test]
+#   * `rt-multi-thread` — multi-thread async runtime (Tauri default)
+#   * `sync`           — Mutex/Semaphore/Notify primitives (rt-multi-thread implies this)
+#   * `time`           — sleep / timeout (anthropic_skills, mcp_protocol)
+# The previous `features = ["full"]` pulled in net, signal, parking_lot,
+# mio and several other large sub-modules we never use, materially
+# increasing the release binary size. `rt-multi-thread` enables `task`
+# (spawn_blocking) and `sync` implicitly.
+tokio = { version = "1.0", features = [
+    "fs",
+    "process",
+    "io-util",
+    "macros",
+    "rt-multi-thread",
+    "time",
+] }
 dirs = "6.0"
 walkdir = "2.5"
 zip = { version = "2.2", default-features = false, features = ["deflate"] }

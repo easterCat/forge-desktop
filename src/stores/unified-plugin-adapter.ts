@@ -10,11 +10,9 @@ import { ref, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type {
   UnifiedPlugin,
-  PluginSource,
-  SyncTarget,
   ClientType,
 } from '@/types/unified-plugin';
-import { SUPPORTED_CLIENTS } from '@/types/unified-plugin';
+
 
 // ============================================================================
 // 现有类型 (保留兼容)
@@ -138,7 +136,7 @@ export const useUnifiedPluginAdapterStore = defineStore('unified-plugin-adapter'
 
     try {
       // 从 allagents marketplace 获取来源
-      const result = await invoke<{ success: boolean; data?: any; error?: string }>(
+      const result = await invoke<{ success: boolean; data?: { output?: string }; error?: string }>(
         'allagents_marketplace_list',
         { workspacePath: '' }
       );
@@ -148,7 +146,7 @@ export const useUnifiedPluginAdapterStore = defineStore('unified-plugin-adapter'
       }
 
       // 同时加载本地预设来源
-      const localResult = await invoke<{ success: boolean; data?: any }>(
+      const localResult = await invoke<{ success: boolean; data?: MarketplaceSource[] }>(
         'get_marketplace_sources'
       );
 
@@ -244,7 +242,7 @@ export const useUnifiedPluginAdapterStore = defineStore('unified-plugin-adapter'
     error.value = null;
 
     try {
-      const result = await invoke<{ success: boolean; data?: any }>(
+      const result = await invoke<{ success: boolean; data?: MarketplacePluginData[] }>(
         'fetch_marketplace_plugins',
         { sourceId: sourceId || activeSourceId.value }
       );
@@ -266,13 +264,13 @@ export const useUnifiedPluginAdapterStore = defineStore('unified-plugin-adapter'
 
     try {
       // 从 allagents 获取已安装的插件
-      const result = await invoke<{ success: boolean; data?: any }>(
+      const result = await invoke<{ success: boolean; data?: { plugins?: unknown[] } }>(
         'allagents_plugin_list',
         { workspacePath: '' }
       );
 
       if (result.success && result.data?.plugins) {
-        installedPlugins.value = result.data.plugins.map((p: any) =>
+        installedPlugins.value = result.data.plugins.map((p) =>
           convertAllagentsPlugin(p)
         );
       }
@@ -399,7 +397,7 @@ export const useUnifiedPluginAdapterStore = defineStore('unified-plugin-adapter'
     error.value = null;
 
     try {
-      const result = await invoke<{ success: boolean; data?: any; error?: string }>(
+      const result = await invoke<{ success: boolean; data?: unknown; error?: string }>(
         'allagents_update',
         {
           workspacePath: '',
@@ -432,26 +430,27 @@ export const useUnifiedPluginAdapterStore = defineStore('unified-plugin-adapter'
   // ==========================================================================
 
   /** 将 allagents 插件转换为 UnifiedPlugin */
-  function convertAllagentsPlugin(raw: any): UnifiedPlugin {
+  function convertAllagentsPlugin(raw: unknown): UnifiedPlugin {
+    const r = raw as Record<string, unknown>;
     return {
-      id: raw.name,
-      name: raw.name,
-      description: raw.description ?? '',
-      version: raw.version,
+      id: String(r.name ?? ''),
+      name: String(r.name ?? ''),
+      description: String(r.description ?? ''),
+      version: String(r.version ?? ''),
       source: {
         type: 'marketplace',
-        marketplace: raw.source,
+        marketplace: String(r.source ?? ''),
       },
       scope: 'project',
       type: 'skill',
       tags: [],
       categories: [],
-      installed: raw.installed ?? true,
+      installed: r.installed !== false,
       enabled: true,
       syncTargets: [],
       syncStatus: 'synced',
       targetClients: [],
-      allagentsSpec: raw.name,
+      allagentsSpec: String(r.name ?? ''),
     };
   }
 

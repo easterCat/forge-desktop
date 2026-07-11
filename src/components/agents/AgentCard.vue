@@ -48,7 +48,7 @@
       <button class="btn btn-secondary btn-sm" @click.stop="$emit('click')">
         View
       </button>
-      <button class="btn-icon btn-sm" @click.stop title="More actions">
+      <button class="btn-icon btn-sm" title="More actions" @click.stop>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="5" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="12" cy="19" r="1" />
         </svg>

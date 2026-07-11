@@ -5,14 +5,13 @@
  * 供 Vue 组件直接使用。
  */
 
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 import { useUnifiedPluginStore } from '@/stores/unified-plugin';
 import type {
   UnifiedPlugin,
   UnifiedMCP,
   ClientType,
   PluginContentType,
-  WorkspaceConfig,
 } from '@/types/unified-plugin';
 import { SUPPORTED_CLIENTS, CLIENT_DISPLAY_NAMES } from '@/types/unified-plugin';
 
@@ -23,10 +22,9 @@ export function useAllAgents() {
   // 响应式状态
   // ==========================================================================
 
-  const isLoading = computed(() => store.isLoading);
-  const error = computed(() => store.error);
-  const syncStatus = computed(() => store.syncStatus);
-  const syncStats = computed(() => store.syncStats);
+const isLoading = computed(() => store.isLoading);
+const error = computed(() => store.error);
+const syncStatus = computed(() => store.syncStatus);
 
   // ==========================================================================
   // 插件操作
@@ -160,7 +158,7 @@ export function useAllAgents() {
     syncedCount: number;
     errorCount: number;
   }> {
-    const result = await store.syncAll({ dryRun: true });
+    await store.syncAll({ dryRun: true });
     return {
       syncedCount: store.syncStatus.syncedCount,
       errorCount: store.syncStatus.errorCount,

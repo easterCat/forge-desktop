@@ -78,7 +78,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="dropdown-wrapper" @click.stop ref="wrapperRef">
+  <div ref="wrapperRef" class="dropdown-wrapper" @click.stop>
     <slot name="trigger" />
     <Teleport to="body">
       <Transition name="dropdown">

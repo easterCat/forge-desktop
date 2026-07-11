@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+// `v-html` is intentional in this component: it renders the output of
+// `renderMarkdown`, which uses a placeholder protocol that HTML-escapes
+// user text at stash time and runs every link through `sanitizeUrl()`.
+// The emitted HTML is restricted to the closed set of tags listed in
+// `safeTags` (h1-h4, ul, ol, li, p, strong, em, code, pre, blockquote,
+// a, hr). Reviewed against the S-1 XSS finding from the security audit.
+/* eslint-disable vue/no-v-html */
+import { computed, ref, watch } from 'vue';
 import { renderMarkdown } from '@/utils/markdown';
 
 const props = defineProps<{
@@ -14,8 +21,21 @@ const emit = defineEmits<{
   save: [sourceId: string, note: string];
 }>();
 
+// Mirrors the renderer cap. Keeping this in sync with `MAX_INPUT_LEN` in
+// `utils/markdown.ts` prevents the textarea from holding text that the
+// renderer will silently truncate, so the user gets immediate feedback
+// when their note is too long.
+const MAX_NOTE_LEN = 256 * 1024;
 const noteContent = ref('');
 const activeTab = ref<'edit' | 'preview'>('edit');
+
+// `renderMarkdown` returns HTML. With our placeholder-based renderer the
+// output is already safe for `v-html`, but we still compute it through a
+// `computed` so the heavy work is cached and skipped on every keystroke
+// while editing.
+const previewHtml = computed(() => renderMarkdown(noteContent.value));
+
+const isOverLimit = computed(() => noteContent.value.length > MAX_NOTE_LEN);
 
 // Sync content when dialog opens
 watch(
@@ -26,10 +46,11 @@ watch(
       activeTab.value = 'edit';
     }
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 function handleSave() {
+  if (isOverLimit.value) return;
   emit('save', props.sourceId, noteContent.value);
   emit('update:visible', false);
 }
@@ -76,17 +97,22 @@ function handleClose() {
             class="note-textarea"
             placeholder="输入 Markdown 备注..."
             spellcheck="false"
+            :maxlength="MAX_NOTE_LEN"
           />
+          <!-- eslint-disable-next-line vue/no-v-html -->
           <div
             v-else
             class="note-preview markdown-body"
-            v-html="renderMarkdown(noteContent)"
+            v-html="previewHtml"
           />
+          <p v-if="isOverLimit" class="note-warning" role="alert">
+            备注超过最大长度（{{ MAX_NOTE_LEN }} 字符），请精简后保存。
+          </p>
         </div>
 
         <div class="note-dialog-footer">
-          <button class="btn btn-outline btn-sm" @click="handleClose">取消</button>
-          <button class="btn btn-primary btn-sm" @click="handleSave">保存</button>
+          <button class="btn btn-outline btn-sm" :disabled="isOverLimit" @click="handleClose">取消</button>
+          <button class="btn btn-primary btn-sm" :disabled="isOverLimit" @click="handleSave">保存</button>
         </div>
       </div>
     </div>
@@ -247,6 +273,16 @@ function handleClose() {
   padding: 12px 20px;
   border-top: 1px solid var(--border);
   flex-shrink: 0;
+}
+
+.note-warning {
+  margin: 8px 16px 0;
+  padding: 8px 12px;
+  background: var(--color-danger-soft, rgba(255, 80, 80, 0.12));
+  color: var(--color-danger, #c0392b);
+  border-radius: var(--radius-sm, 8px);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 /* ---- Markdown content styles ---- */

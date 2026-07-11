@@ -5,9 +5,12 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Forge</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Audit 1.4: pre-load the entry chunk and the global stylesheet so the
+         browser starts fetching them in parallel with /src/main.ts instead of
+         waiting for the JS to discover them via dynamic import. -->
+    <link rel="modulepreload" href="/src/main.ts" />
+    <link rel="preload" as="style" href="/src/assets/main.css" />
+    <link rel="stylesheet" href="/src/assets/main.css" />
   </head>
   <body>
     <div id="app"></div>

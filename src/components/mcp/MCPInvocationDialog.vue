@@ -8,7 +8,7 @@
           <h3 :id="`tool-dialog-${tool.name}`">{{ tool.name }}</h3>
           <span class="tool-service">{{ service.name }}</span>
         </div>
-        <button class="close-btn" @click="$emit('close')" aria-label="Close dialog">
+        <button class="close-btn" aria-label="Close dialog" @click="$emit('close')">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/>
             <line x1="6" y1="6" x2="18" y2="18"/>
@@ -24,7 +24,7 @@
         </div>
 
         <!-- Arguments Form -->
-        <form @submit.prevent="handleInvoke" class="args-form">
+        <form class="args-form" @submit.prevent="handleInvoke">
           <div
             v-for="field in formFields"
             :key="field.name"
@@ -130,7 +130,7 @@
                 </svg>
                 {{ result.durationMs }}ms
               </span>
-              <button class="copy-btn" @click="copyResult" title="Copy to clipboard">
+              <button class="copy-btn" title="Copy to clipboard" @click="copyResult">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
@@ -158,22 +158,31 @@
 import { reactive, ref, computed } from 'vue';
 import { useMCPStore } from '@/stores/mcp';
 import { schemaToFormFields } from '@/utils/mcp-schema-to-form';
-import type { MCPService, MCPTool, MCPInvocationResult, FormField } from '@/types';
+import type { MCPService, MCPTool, MCPInvocationResult } from '@/types';
+import type { FormField } from '@/utils/mcp-schema-to-form';
 
 interface Props {
   service: MCPService;
   tool: MCPTool;
 }
 
+// `defineProps` registers the type for template auto-destructure AND
+// exposes a `props` binding we read at runtime. Even when we only use
+// the runtime binding from setup, ESLint doesn't see the macro and
+// reports the binding as "unused" — suppress inline.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const props = defineProps<Props>();
 
-const emit = defineEmits<{
+defineEmits<{
   (e: 'close'): void;
 }>();
 
 const store = useMCPStore();
 
-const args = reactive<Record<string, unknown>>({});
+// Form field values: stored as strings for v-model compatibility with
+// input/select/textarea. Textarea fields hold JSON which is parsed
+// at submit time (see `handleInvoke`).
+const args = reactive<Record<string, string>>({});
 const fieldErrors = reactive<Record<string, string>>({});
 const isInvoking = ref(false);
 const result = ref<MCPInvocationResult | null>(null);
@@ -189,7 +198,7 @@ const formFields = computed<FormField[]>(() => {
 // Initialize args with defaults
 formFields.value.forEach(field => {
   if (field.default !== undefined) {
-    args[field.name] = field.default;
+    args[field.name] = String(field.default ?? '');
   }
 });
 
@@ -232,7 +241,7 @@ async function handleInvoke() {
   formFields.value.forEach(field => {
     if (field.type === 'textarea' && args[field.name]) {
       try {
-        parsedArgs[field.name] = JSON.parse(args[field.name] as string);
+        parsedArgs[field.name] = JSON.parse(args[field.name]);
       } catch {
         parsedArgs[field.name] = args[field.name];
       }
@@ -328,7 +337,7 @@ async function copyResult() {
 .dialog-header h3 {
   font-size: 16px;
   font-weight: 600;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
 }
 
 .tool-service {

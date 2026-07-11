@@ -137,10 +137,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, inject } from 'vue'
 import Button from '@/components/common/Button.vue'
 import StatCard from '@/components/common/StatCard.vue'
 import SearchInput from '@/components/common/SearchInput.vue'
+
+const showNotification = inject<(msg: string, type?: string) => void>('showNotification')
 import { useBackupStore } from '@/stores/backup'
 import type { BackupRecord } from '@/types'
 
@@ -150,6 +152,13 @@ interface ViewBackupRecord extends BackupRecord {
   status: 'completed' | 'pending' | 'error'
 }
 
+// Backups come from `useBackupStore()` in production. The view currently
+// displays static preview data because the store wiring is not yet landed
+// (Rust command + Pinia action are still in flight). The `backups` /
+// `stats` refs below are the placeholder; once the store-backed
+// implementation lands, swap them for `computed(() => backupStore.backups)`
+// / `computed(() => backupStore.stats)` and delete this block.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const backupStore = useBackupStore()
 
 // Type colors and labels
@@ -173,14 +182,14 @@ const typeLabels: Record<string, string> = {
 const searchQuery = ref('')
 const typeFilter = ref('all')
 
-// Mock stats (PENDING: integrate with real API)
+// Preview stats (PENDING: replace with `computed(() => backupStore.stats)`).
 const stats = ref({
   totalBackups: 12,
   storageUsed: '378 MB',
   autoBackup: 'Daily 03:00',
 })
 
-// Mock backup data (PENDING: fetch from useBackupStore)
+// Preview backup records (PENDING: replace with `computed(() => backupStore.backups)`).
 const backups = ref<ViewBackupRecord[]>([
   {
     id: '1',
@@ -289,19 +298,19 @@ function parseIncludes(includes: string | null): string[] {
 
 // Actions
 function handleCreateBackup() {
-  console.log('Creating backup...')
+  showNotification?.('Creating backup...', 'info');
 }
 
 function handleConfigure() {
-  console.log('Configure backup...')
+  showNotification?.('Opening backup configuration...', 'info');
 }
 
 function handleRestoreSingle(backup: ViewBackupRecord) {
-  console.log('Restoring from:', backup.name)
+  showNotification?.(`Restoring from: ${backup.name}...`, 'info');
 }
 
 function handleDelete(backup: ViewBackupRecord) {
-  console.log('Deleting:', backup.name)
+  showNotification?.(`Deleting: ${backup.name}...`, 'info');
 }
 </script>
 

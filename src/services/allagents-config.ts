@@ -71,7 +71,7 @@ function generatePluginEntries(
       plugin.targetClients.length > 0 ||
       (plugin.type === 'skill' && plugin.parentPlugin)
     ) {
-      const entry: Record<string, unknown> = {
+      const entry: NonNullable<WorkspaceConfig['plugins']>[number] = {
         name: spec,
       };
 
@@ -83,7 +83,7 @@ function generatePluginEntries(
         entry.install = plugin.installMode;
       }
 
-      entries?.push(entry as any);
+      entries?.push(entry);
     } else {
       // 简单格式
       entries?.push(spec);

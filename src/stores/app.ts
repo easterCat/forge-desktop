@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+
 import { useSoftwareStore } from './software';
 
 export const useAppStore = defineStore('app', () => {
@@ -37,16 +37,12 @@ export const useAppStore = defineStore('app', () => {
   }
 
   async function initialize() {
-    console.log('[appStore] initialize called');
     try {
       setLoading(true);
       clearError();
       const softwareStore = useSoftwareStore();
-      console.log('[appStore] About to call fetchCliTools...');
       await softwareStore.fetchCliTools();
-      console.log('[appStore] About to call checkAllCliToolsStatus...');
       await softwareStore.checkAllCliToolsStatus();
-      console.log('[appStore] initialize complete');
     } catch (e) {
       console.error('[appStore] initialize error:', e);
       setError(e instanceof Error ? e.message : 'Failed to initialize app');

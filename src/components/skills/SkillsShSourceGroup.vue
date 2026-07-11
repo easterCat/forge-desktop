@@ -31,7 +31,7 @@
 
     <Transition name="expand">
       <div v-if="isExpanded" class="group-content">
-        <div class="featured-skill" v-if="featuredSkill">
+        <div v-if="featuredSkill" class="featured-skill">
           <span class="featured-label">精选</span>
           <span class="featured-name">{{ featuredSkill.name }}</span>
         </div>
@@ -49,7 +49,7 @@
             </div>
             <div class="skill-actions">
               <span class="install-stat">{{ formatNumber(skill.installs) }}</span>
-              <button class="btn-icon" @click.stop="$emit('detail', skill)" title="查看详情">
+              <button class="btn-icon" title="查看详情" @click.stop="$emit('detail', skill)">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="11" cy="11" r="8"/>
                   <line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -65,7 +65,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import type { SkillsShSourceGroup, SkillsShCuratedOwnerGroup } from '@/types';
+import type { SkillsShSkill, SkillsShSourceGroup, SkillsShCuratedOwnerGroup } from '@/types';
 
 const props = defineProps<{
   group: SkillsShSourceGroup | SkillsShCuratedOwnerGroup;
@@ -73,8 +73,8 @@ const props = defineProps<{
 }>();
 
 defineEmits<{
-  (e: 'skillClick', skill: any): void;
-  (e: 'detail', skill: any): void;
+  (e: 'skillClick', skill: SkillsShSkill): void;
+  (e: 'detail', skill: SkillsShSkill): void;
 }>();
 
 const isExpanded = ref(props.defaultExpanded ?? false);

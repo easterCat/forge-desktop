@@ -5,7 +5,7 @@
       <!-- Header -->
       <div class="dialog-header">
         <h3 id="export-dialog-title">Export Mcps</h3>
-        <button class="close-btn" @click="$emit('close')" aria-label="Close dialog">
+        <button class="close-btn" aria-label="Close dialog" @click="$emit('close')">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/>
             <line x1="6" y1="6" x2="18" y2="18"/>
@@ -20,7 +20,7 @@
           <h4>Export Format</h4>
           <div class="format-selector">
             <label class="radio-option">
-              <input type="radio" v-model="format" value="json" />
+              <input v-model="format" type="radio" value="json" />
               <span class="radio-custom"></span>
               <span class="radio-label">
                 <strong>JSON</strong>
@@ -28,7 +28,7 @@
               </span>
             </label>
             <label class="radio-option">
-              <input type="radio" v-model="format" value="yaml" />
+              <input v-model="format" type="radio" value="yaml" />
               <span class="radio-custom"></span>
               <span class="radio-label">
                 <strong>YAML</strong>
@@ -43,7 +43,7 @@
           <h4>Select Servers</h4>
           <div class="scope-selector">
             <label class="select-all">
-              <input type="checkbox" v-model="selectAll" @change="toggleAll" />
+              <input v-model="selectAll" type="checkbox" @change="toggleAll" />
               <span class="checkbox-custom"></span>
               <span>Select All ({{ services.length }})</span>
             </label>
@@ -55,8 +55,8 @@
                 class="checkbox-option"
               >
                 <input
-                  type="checkbox"
                   v-model="selectedIds"
+                  type="checkbox"
                   :value="service.id"
                 />
                 <span class="checkbox-custom"></span>
@@ -177,9 +177,8 @@ function yamlPreview(data: Record<string, unknown>): string {
   lines.push('services:');
 
   const services = data.services as Array<Record<string, unknown>>;
-  services.forEach((service, index) => {
+  services.forEach((service) => {
     const indent = '  ';
-    const isLast = index === services.length - 1;
 
     lines.push(`${indent}- name: "${service.name}"`);
     lines.push(`${indent}  endpoint: "${service.endpoint}"`);

@@ -5,7 +5,7 @@
       <!-- Header -->
       <div class="dialog-header">
         <h3>Install Skill</h3>
-        <button class="close-btn" @click="$emit('close')" aria-label="关闭">
+        <button class="close-btn" aria-label="关闭" @click="$emit('close')">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/>
             <line x1="6" y1="6" x2="18" y2="18"/>
@@ -31,8 +31,8 @@
         <label>Install to</label>
         <div class="path-input">
           <input
-            type="text"
             v-model="localPath"
+            type="text"
             placeholder="Select installation path..."
             readonly
           />
@@ -54,8 +54,8 @@
           >
             <label class="checkbox-label">
               <input
-                type="checkbox"
                 v-model="selectedTargets"
+                type="checkbox"
                 :value="target"
               />
               <span class="checkbox-custom"></span>

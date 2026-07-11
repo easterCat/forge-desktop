@@ -5,7 +5,7 @@
       <!-- Header -->
       <div class="dialog-header">
         <h3>Plugin Details</h3>
-        <button class="close-btn" @click="$emit('close')" aria-label="关闭" title="Close">
+        <button class="close-btn" aria-label="关闭" title="Close" @click="$emit('close')">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/>
             <line x1="6" y1="6" x2="18" y2="18"/>
@@ -486,9 +486,14 @@ interface Props {
   plugin: MarketplacePlugin;
 }
 
+// `defineProps` registers the type for template auto-destructure AND
+// exposes a `props` binding we read at runtime. Even when we only use
+// the runtime binding from setup, ESLint doesn't see the macro and
+// reports the binding as "unused" — suppress inline.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const props = defineProps<Props>();
 
-const emit = defineEmits<{
+defineEmits<{
   (e: 'close'): void;
 }>();
 

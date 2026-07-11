@@ -90,8 +90,8 @@ function formatDownloads(n: number): string {
       <div class="btn-group">
         <button
           class="btn btn-icon"
-          @click.stop="emit('click')"
           title="Details"
+          @click.stop="emit('click')"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <circle cx="12" cy="12" r="10"/>

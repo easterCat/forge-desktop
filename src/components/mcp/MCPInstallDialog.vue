@@ -5,7 +5,7 @@
       <!-- Header -->
       <div class="dialog-header">
         <h3>Install MCP Server</h3>
-        <button class="close-btn" @click="$emit('close')" aria-label="关闭">
+        <button class="close-btn" aria-label="关闭" @click="$emit('close')">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/>
             <line x1="6" y1="6" x2="18" y2="18"/>
@@ -67,8 +67,8 @@
         <label>Install Directory</label>
         <div class="path-input">
           <input
-            type="text"
             v-model="installDir"
+            type="text"
             placeholder="Select installation directory..."
           />
           <button class="btn btn-secondary btn-sm" @click="browsePath">
@@ -96,8 +96,8 @@
           >
             <label class="checkbox-label">
               <input
-                type="checkbox"
                 v-model="selectedTargets"
+                type="checkbox"
                 :value="target"
               />
               <span class="checkbox-custom"></span>
@@ -159,22 +159,22 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue';
-import type { MCPServer, MCPSyncTarget } from '@/types';
+import type { MCPServerUnion, MarketplaceMCPSyncTarget } from '@/types';
 
 interface Props {
-  server: MCPServer;
-  syncTargets: MCPSyncTarget[];
+  server: MCPServerUnion;
+  syncTargets: MarketplaceMCPSyncTarget[];
 }
 
 const props = defineProps<Props>();
 
 const emit = defineEmits<{
   (e: 'close'): void;
-  (e: 'install', data: { server: MCPServer; syncTargets: MCPSyncTarget[]; installDir: string }): void;
+  (e: 'install', data: { server: MCPServerUnion; syncTargets: MarketplaceMCPSyncTarget[]; installDir: string }): void;
 }>();
 
 const installDir = ref('');
-const selectedTargets = ref<MCPSyncTarget[]>([]);
+const selectedTargets = ref<MarketplaceMCPSyncTarget[]>([]);
 
 // Default to first target
 watch(() => props.syncTargets, (targets) => {

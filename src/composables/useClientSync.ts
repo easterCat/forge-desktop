@@ -1,9 +1,10 @@
-import { ref, computed, inject } from 'vue'
+import { ref, computed, inject, type Ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import {
   SUPPORTED_CLIENTS,
   CLIENT_DISPLAY_NAMES,
   CLIENT_ICONS,
+  CLIENT_COLORS,
   type ClientType
 } from '@/types/unified-plugin'
 import { useUnifiedPluginStore } from '@/stores/unified-plugin'
@@ -32,46 +33,21 @@ interface WorkspaceStatus {
 }
 
 /** Tauri 命令执行结果 */
-interface CommandResult {
+interface CommandResult<T = unknown> {
   success: boolean
-  data?: any
+  data?: T
   error?: string
 }
 
-// 客户端颜色映射
-const CLIENT_COLORS: Record<ClientType, string> = {
-  claude: '#D97706',
-  copilot: '#6E40C9',
-  codex: '#10A37F',
-  cursor: '#7C3AED',
-  opencode: '#3B82F6',
-  gemini: '#4285F4',
-  factory: '#F59E0B',
-  ampcode: '#8B5CF6',
-  vscode: '#007ACC',
-  windsurf: '#3B82F6',
-  cline: '#10B981',
-  continue: '#6366F1',
-  roo: '#EC4899',
-  kilo: '#8B5CF6',
-  trae: '#F97316',
-  augment: '#6366F1',
-  zencoder: '#14B8A6',
-  junie: '#84CC16',
-  openhands: '#F59E0B',
-  kiro: '#3B82F6',
-  replit: '#F97316',
-  kimi: '#8B5CF6',
-  universal: '#6B7280'
-}
+// 客户端颜色映射（从 unified-plugin.ts 统一导出）
 
 export interface UseClientSyncReturn {
-  clients: ReturnType<typeof ref<ClientInfo[]>>
-  totalSyncedCount: ReturnType<typeof computed<number>>
-  isDialogOpen: ReturnType<typeof ref<boolean>>
-  syncingClient: ReturnType<typeof ref<string | null>>
-  isLoading: ReturnType<typeof ref<boolean>>
-  currentError: ReturnType<typeof ref<AppError | null>>
+  clients: Ref<ClientInfo[]>
+  totalSyncedCount: Ref<number>
+  isDialogOpen: Ref<boolean>
+  syncingClient: Ref<string | null>
+  isLoading: Ref<boolean>
+  currentError: Ref<AppError | null>
   toggleDialog: () => void
   toggleSync: (clientKey: string) => Promise<void>
   syncAll: () => Promise<void>
@@ -158,7 +134,7 @@ export function useClientSync(): UseClientSyncReturn {
     try {
       // 调用 allagents_update，传递必需的 workspacePath 参数
       // 使用 withRetry 处理可恢复的错误（如网络超时）
-      const result = await withRetry(async () => {
+      await withRetry(async () => {
         const res = await invoke<CommandResult>('allagents_update', {
           workspacePath: pluginStore.workspacePath,
           client: clientKey
@@ -243,7 +219,7 @@ export function useClientSync(): UseClientSyncReturn {
       }
 
       // 解包 CommandResult，获取实际的 WorkspaceStatus
-      const status: WorkspaceStatus = result.data
+      const status = result.data as WorkspaceStatus
 
       // 使用 status.clients 判断客户端是否已配置/安装
       const configuredClients = status.clients || []

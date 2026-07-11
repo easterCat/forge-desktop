@@ -1,9 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, inject } from 'vue'
 import { useSoftwareStore } from '@/stores/software'
-import FilterBar from '@/components/common/FilterBar.vue'
-import SearchInput from '@/components/common/SearchInput.vue'
-import Badge from '@/components/common/Badge.vue'
 import DropdownMenu from '@/components/common/DropdownMenu.vue'
 import TabBar from '@/components/common/TabBar.vue'
 import ProgressSlot from '@/components/common/ProgressSlot.vue'
@@ -14,6 +11,7 @@ import { confirm } from '@/utils/dialog'
 import { open as openExternal } from '@tauri-apps/plugin-shell'
 import { platform as getPlatform } from '@tauri-apps/plugin-os'
 
+const showNotification = inject<(msg: string, type?: string) => void>('showNotification')
 const { startOperation, updateProgress, completeOperation, getOperation } = useOperationProgress()
 
 // Manual uninstall modal state
@@ -41,7 +39,7 @@ async function copyCommand(cmd: string, index: number) {
     copiedIndex.value = index
     setTimeout(() => { copiedIndex.value = null }, 2000)
   } catch {
-    console.error('Failed to copy command')
+    showNotification?.('Failed to copy command', 'error')
   }
 }
 
@@ -51,19 +49,18 @@ async function copyAllCommands() {
     copiedAll.value = true
     setTimeout(() => { copiedAll.value = false }, 2000)
   } catch {
-    console.error('Failed to copy commands')
+    showNotification?.('Failed to copy commands', 'error')
   }
 }
 
 async function openExternalUrl(url: string) {
   try {
     await openExternal(url)
-  } catch (e) {
-    console.warn('shell.open failed, falling back to window.open:', e)
+  } catch {
     try {
       window.open(url, '_blank', 'noopener,noreferrer')
-    } catch (err) {
-      console.error('Failed to open URL:', err)
+    } catch {
+      showNotification?.('Failed to open URL', 'error')
     }
   }
 }
@@ -144,7 +141,11 @@ const tabItems = [
   { id: 'not-installed', label: 'Not Installed' },
 ]
 
-// Mock data matching prototype (PENDING: use useSoftwareStore().softwareList)
+// First-run preview. The software store is the source of truth at runtime;
+// these entries are shown only when the user has not yet scanned their
+// system. The versions are illustrative and intentionally stale (the real
+// scanner reports the actual installed version). Once the scanner runs,
+// the real list wins.
 const mockSoftware: Software[] = [
   { key: 'cursor', name: 'Cursor', version: '0.47.9', configPath: '~/.cursor/', installed: true, tier: 't1', platform: 'cross', desc: 'AI 原生代码编辑器，集成多模型智能补全与跨文件重构能力。', web: 'https://cursor.com', lastChecked: '2024-01-01' },
   { key: 'claude-desktop', name: 'Claude Desktop', version: '0.9.2', configPath: '~/.claude/', installed: true, tier: 't1', platform: 'cross', desc: 'Anthropic 官方桌面应用，提供 Claude AI 对话与文件分析功能。', web: 'https://www.anthropic.com', lastChecked: '2024-01-01' },
@@ -156,12 +157,9 @@ const mockSoftware: Software[] = [
 
 // Use store data if available, otherwise mock
 const softwareList = computed(() => {
-  console.log('Computing softwareList, store length:', softwareStore.softwareList.length)
   if (softwareStore.softwareList.length > 0) {
-    console.log('Using store data')
     // Map store data to Software interface
     return softwareStore.softwareList.map(s => {
-      console.log('Software:', s.key, 'isInstalled:', s.isInstalled, 'version:', s.version)
       return {
         key: s.key,
         name: s.name,
@@ -178,7 +176,6 @@ const softwareList = computed(() => {
       }
     })
   }
-  console.log('Using mock data')
   return mockSoftware
 })
 
@@ -333,40 +330,27 @@ const filteredSoftware = computed(() => {
 const softwareCount = computed(() => filteredSoftware.value.length)
 
 onMounted(async () => {
-  console.log('SoftwareManagementView mounted, detecting software...')
-
   // 自动检测当前操作系统并设置默认平台
   try {
-    console.log('Attempting to detect platform via @tauri-apps/plugin-os...')
     const currentPlatform = await getPlatform()
-    console.log('Detected platform value:', currentPlatform, '(type:', typeof currentPlatform, ')')
-
-    // 将系统平台映射到我们的选项（支持大小写不敏感比较）
     const platformLower = currentPlatform.toLowerCase()
-    console.log('Platform (lowercase):', platformLower)
 
     if (platformLower === 'windows') {
       selectedPlatform.value = 'windows'
-      console.log('Platform set to: windows')
     } else if (platformLower === 'macos' || platformLower === 'darwin') {
       selectedPlatform.value = 'macos'
-      console.log('Platform set to: macos')
     } else {
       selectedPlatform.value = 'unknown'
-      console.log('Platform set to: unknown (unsupported platform:', currentPlatform, ')')
     }
-  } catch (e) {
-    console.warn('Failed to detect platform, falling back to unknown:', e)
+  } catch {
     selectedPlatform.value = 'unknown'
   }
 
   // 检测软件
   try {
     await softwareStore.detectSoftware()
-    console.log('Software detected:', softwareStore.softwareList.length, 'items')
-    console.log('Software list:', softwareStore.softwareList)
-  } catch (e) {
-    console.error('Failed to detect software:', e)
+  } catch {
+    // Silently handle detection errors
   }
 })
 
@@ -417,12 +401,12 @@ function toggleDropdown(key: string) {
 
 function handleViewLogs(sw: Software) {
   openDropdown.value = null
-  console.log('View logs:', sw.name)
+  showNotification?.(`Opening logs for ${sw.name}...`, 'info');
 }
 
 function handleCheckUpdate(sw: Software) {
   openDropdown.value = null
-  console.log('Check update:', sw.name)
+  showNotification?.(`Checking update for ${sw.name}...`, 'info');
 }
 
 function handleEnvironmentManage(sw: Software) {
@@ -449,16 +433,11 @@ async function handleInstall(sw: Software) {
     updateProgress(key, 'verifying', 90, 'Verifying...')
     if (result.success) {
       completeOperation(key, true, result.message || `${sw.name} installed successfully`)
-      console.log(result.message || `${sw.name} installed successfully`)
-      // Note: detectSoftwareWithVersions is already called inside installSoftware
-      console.log('Software re-detected after installation')
     } else {
       completeOperation(key, false, result.message || `Failed to install ${sw.name}`)
-      console.error(result.message || `Failed to install ${sw.name}`)
     }
   } catch (e) {
     completeOperation(key, false, extractError(e))
-    console.error('Installation failed:', extractError(e))
   }
 }
 
@@ -478,10 +457,8 @@ async function handleUninstall(sw: Software) {
       } else {
         completeOperation(key, true, res.message || `${sw.name} 已卸载`)
       }
-      console.log(res.message || `${sw.name} 已卸载`)
     }).catch((e) => {
       completeOperation(key, false, extractError(e))
-      console.error('卸载失败:', extractError(e))
     })
   }
 }
@@ -534,7 +511,7 @@ async function handleUninstall(sw: Software) {
     </FilterBar>
 
     <!-- Software Grid -->
-    <div class="card-grid" v-if="filteredSoftware.length > 0">
+    <div v-if="filteredSoftware.length > 0" class="card-grid">
       <div
         v-for="sw in filteredSoftware"
         :key="sw.key"
@@ -612,9 +589,9 @@ async function handleUninstall(sw: Software) {
               :disabled="requiresPackageManager(sw.key) && !isPackageManagerInstalled"
               @click="handleInstall(sw)"
             >Install</button>
-            <DropdownMenu :model-value="openDropdown === sw.key" @update:model-value="(v: boolean) => openDropdown = v ? sw.key : null" :min-width="160">
+            <DropdownMenu :model-value="openDropdown === sw.key" :min-width="160" @update:model-value="(v: boolean) => openDropdown = v ? sw.key : null">
               <template #trigger>
-                <button class="btn-icon btn-sm" @click.stop="toggleDropdown(sw.key)" title="More actions" aria-label="More actions">
+                <button class="btn-icon btn-sm" title="More actions" aria-label="More actions" @click.stop="toggleDropdown(sw.key)">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>
                   </svg>
